@@ -31,10 +31,14 @@ npm run docker:up
 npm run db:generate
 ```
 
-## Develop
+## Develop (v1 demo)
 
 ```sh
+npm install
+npm run playwright:install -w web
+cp apps/web/.env.example apps/web/.env.local
+# put your OPENAI_API_KEY in apps/web/.env.local
 npm run dev -- --filter=web
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 then **Open workspace**. Try: go to `http://localhost:3000/demo-login` and sign in.
