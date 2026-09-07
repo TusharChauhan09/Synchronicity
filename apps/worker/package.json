@@ -1,0 +1,27 @@
+{
+  "name": "@repo/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "check-types": "tsc --noEmit",
+    "playwright:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.3.3",
+    "@repo/db": "*",
+    "@repo/types": "*",
+    "inngest": "^3.40.1",
+    "ioredis": "^5.7.0",
+    "playwright": "^1.55.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.5",
+    "typescript": "5.9.2"
+  }
+}

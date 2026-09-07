@@ -1,0 +1,32 @@
+---
+description: Synchronicity locked tech stack — turborepo, Next.js, Prisma, Inngest, Playwright, Agents SDK
+alwaysApply: true
+---
+
+# Synchronicity tech stack
+
+Prefer this stack. Do not swap core pieces without an explicit product decision.
+
+## Locked choices
+
+| Layer | Choice | Responsibility |
+| --- | --- | --- |
+| Monorepo | Turborepo | Packages / apps layout |
+| Web + API | Next.js | Landing, pricing (later), dashboard, chat UI, API layer |
+| ORM / DB | Prisma + Postgres | Users, sessions, billing, agent run / event logs |
+| Cache / bus | Redis (Docker) | Session state / pub-sub |
+| Jobs | Inngest | Spin up session, run agent, wait for human-in-loop, resume, cleanup |
+| Realtime | WebSocket service (separate from Next.js) | Stream chat, live screenshots, user-control input |
+| Browser | Playwright | Clicks, screenshots, navigation inside session container |
+| Agent | OpenAI Agents SDK | Agent loop (screenshot -> decide -> act) + HITL pause / resume |
+| Session isolation | Docker + Fly Machines / Fargate / Cloud Run Jobs | One isolated browser container per session |
+| Media | Cloudinary | Store / serve screenshots |
+| Errors | Sentry | Error tracking |
+| Observability | Agents SDK tracing + Postgres event log | Debug / replay of agent runs |
+
+## Architecture guardrails
+
+- Keep WebSocket streaming **out of** the Next.js process (separate service)
+- One browser container per session; never share browsers across users
+- Inngest owns session lifecycle + HITL wait / resume; WebSocket owns live UI streams
+- Persist agent run / events in Postgres for replay; use SDK tracing for debugging

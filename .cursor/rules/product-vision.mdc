@@ -1,0 +1,34 @@
+---
+description: Synchronicity product vision — browser automation app like browser-use.com
+alwaysApply: true
+---
+
+# Synchronicity product vision
+
+Build a browser-automation product in the spirit of [browser-use.com](https://browser-use.com/): marketing pages plus a live agent-driven browser workspace.
+
+## Product surfaces
+
+- **Marketing**: landing / info pages now; pricing later (do not build pricing until requested)
+- **App**: dashboard + live browser automation workspace (primary product)
+- Keep marketing and app surfaces separate in architecture
+
+## Core UX
+
+- Split layout ~**80% browser / 20% chat** (browser left, prompt chat right)
+- User prompts in the chat drive an agent that acts in the left-side browser
+- Screenshots are sent to the model so it can monitor page state and choose actions
+
+## Agent + browser behavior
+
+- **Playwright** drives the real browser
+- **OpenAI Agents JS** (`@openai/agents`) runs the agent loop: screenshot -> decide -> act
+- Prefer SDK **`computerTool` + `Computer`** wired to Playwright: screenshot, click(x,y), doubleClick, scroll, type, keypress, move, wait, drag
+- Prefer screenshot + coordinate tools over brittle CSS-selector-only automation
+
+## Human-in-the-loop
+
+- For login / auth / other sensitive flows: agent **pauses and requests user permission**
+- User takes temporary control of the browser
+- User presses **Continue** to resume from the **same / current step** (no restart from scratch)
+- Treat user approval / handoff as a first-class agent state, not an afterthought
