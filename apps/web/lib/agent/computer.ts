@@ -4,6 +4,33 @@ import type { Computer } from '@openai/agents';
 type Environment = 'mac' | 'windows' | 'ubuntu' | 'browser';
 type Button = 'left' | 'right' | 'wheel' | 'back' | 'forward';
 
+const KEY_MAP: Record<string, string> = {
+  ENTER: 'Enter',
+  RETURN: 'Enter',
+  ESCAPE: 'Escape',
+  BACKSPACE: 'Backspace',
+  TAB: 'Tab',
+  SPACE: ' ',
+  DELETE: 'Delete',
+  CTRL: 'Control',
+  CONTROL: 'Control',
+  ALT: 'Alt',
+  SHIFT: 'Shift',
+  META: 'Meta',
+  CMD: 'Meta',
+  UP: 'ArrowUp',
+  DOWN: 'ArrowDown',
+  LEFT: 'ArrowLeft',
+  RIGHT: 'ArrowRight',
+};
+
+function toPlaywrightKey(key: string): string {
+  const mapped = KEY_MAP[key.toUpperCase()];
+  if (mapped) return mapped;
+  if (key.length === 1) return key;
+  return key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+}
+
 export class PlaywrightComputer implements Computer {
   private browser!: Browser;
   private context!: BrowserContext;
@@ -14,7 +41,7 @@ export class PlaywrightComputer implements Computer {
 
 
   async launch(startUrl: string = 'https://www.google.com') {
-    this.browser = await chromium.launch({ headless: true });
+    this.browser = await chromium.launch({ headless: false });  // false | for visible browser
     this.context = await this.browser.newContext({
       viewport: { width: this.dimensions[0], height: this.dimensions[1] },
     });
@@ -58,9 +85,8 @@ export class PlaywrightComputer implements Computer {
   }
 
   async keypress(keys: string[]): Promise<void> {
-    for (const key of keys) {
-      await this.page.keyboard.press(key);
-    }
+    if (keys.length === 0) return;
+    await this.page.keyboard.press(keys.map(toPlaywrightKey).join('+'));
   }
 
   async scroll(x: number, y: number, scrollX: number, scrollY: number): Promise<void> {

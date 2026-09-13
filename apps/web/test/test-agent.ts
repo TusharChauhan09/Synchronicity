@@ -1,3 +1,4 @@
+import './load-env';
 import { run } from '@openai/agents';
 import { PlaywrightComputer } from '../lib/agent/computer';
 import { createBrowserAgent } from '../lib/agent/agent';
