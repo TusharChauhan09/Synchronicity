@@ -1,6 +1,7 @@
 import { run } from '@openai/agents';
 import { createBrowserAgent } from './agent';
 import { PlaywrightComputer } from './computer';
+import type { UserControlAction } from './control';
 
 export type SessionStatus = 'idle' | 'running' | 'waiting_for_user';
 
@@ -45,6 +46,7 @@ function createMessage(role: ChatMessage['role'], content: string): ChatMessage 
 }
 
 async function refreshSnapshot(session: AgentSession) {
+  if (session.running) return;
   if (Date.now() - session.lastScreenshotAt < 900) return;
 
   try {
@@ -56,7 +58,17 @@ async function refreshSnapshot(session: AgentSession) {
   }
 }
 
-export async function createSession(startUrl = 'https://duckduckgo.com'): Promise<SessionSnapshot> {
+export async function getOrCreateSession(startUrl = 'https://duckduckgo.com'): Promise<SessionSnapshot> {
+  const existing = sessions.values().next().value as AgentSession | undefined;
+  if (existing) {
+    await refreshSnapshot(existing);
+    return getSessionSnapshot(existing.id)!;
+  }
+
+  return createSession(startUrl);
+}
+
+async function createSession(startUrl = 'https://duckduckgo.com'): Promise<SessionSnapshot> {
   const id = crypto.randomUUID();
   const computer = new PlaywrightComputer();
 
@@ -76,7 +88,7 @@ export async function createSession(startUrl = 'https://duckduckgo.com'): Promis
     session.resumeResolver = undefined;
   });
 
-  await computer.launch(startUrl, { headless: false });
+  await computer.launch(startUrl, { headless: true, useProfile: false });
 
   const session: AgentSession = {
     id,
@@ -140,17 +152,72 @@ export async function closeSession(id: string): Promise<boolean> {
     session.resumeResolver();
   }
 
-  await session.computer.close();
+  try {
+    await session.computer.close();
+  } catch {
+    // Browser may already be closed
+  }
+
   return true;
 }
 
-export async function runSessionTask(id: string, prompt: string): Promise<SessionSnapshot | null> {
+export async function cleanupAllSessions(): Promise<void> {
+  const ids = [...sessions.keys()];
+  for (const id of ids) {
+    await closeSession(id);
+  }
+}
+
+export async function applyUserControl(
+  id: string,
+  action: UserControlAction,
+): Promise<SessionSnapshot | null> {
+  const session = sessions.get(id);
+  if (!session) return null;
+  if (session.running) return null;
+  if (session.status !== 'waiting_for_user' && session.status !== 'idle') return null;
+
+  const { computer } = session;
+
+  switch (action.type) {
+    case 'click':
+      await computer.click(action.x, action.y, 'left');
+      break;
+    case 'type':
+      await computer.type(action.text);
+      break;
+    case 'key':
+      await computer.keypress([action.key]);
+      break;
+    case 'scroll':
+      await computer.scroll(action.x, action.y, 0, action.deltaY);
+      break;
+  }
+
+  session.lastScreenshotAt = 0;
+  await refreshSnapshot(session);
+  return getSessionSnapshot(id);
+}
+
+export function startSessionTask(id: string, prompt: string): SessionSnapshot | null {
   const session = sessions.get(id);
   if (!session || session.running) return getSessionSnapshot(id);
 
   session.running = true;
   session.status = 'running';
   session.messages.push(createMessage('user', prompt));
+
+  return getSessionSnapshot(id);
+}
+
+export async function runSessionTask(id: string, prompt: string): Promise<SessionSnapshot | null> {
+  const session = sessions.get(id);
+  if (!session) return null;
+
+  if (!session.running) {
+    const snapshot = startSessionTask(id, prompt);
+    if (!snapshot) return null;
+  }
 
   try {
     const agent = createBrowserAgent(session.computer);

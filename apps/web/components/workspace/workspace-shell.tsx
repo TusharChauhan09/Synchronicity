@@ -1,15 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
+import { Button } from "@/components/ui/button";
 import type { SessionSnapshot } from "@/lib/agent/session";
+
+async function destroySession(sessionId: string) {
+  await fetch(`/api/session/${sessionId}`, { method: "DELETE" });
+}
 
 export function WorkspaceShell() {
   const [session, setSession] = useState<SessionSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [manualControl, setManualControl] = useState(false);
+  const sessionIdRef = useRef<string | null>(null);
+  const bootIdRef = useRef(0);
+
+  const waiting = session?.status === "waiting_for_user";
+  const controllable = Boolean(session && !loading && (waiting || (manualControl && session.status === "idle")));
 
   const refresh = useCallback(async (sessionId: string) => {
     const response = await fetch(`/api/session/${sessionId}`);
@@ -20,7 +31,7 @@ export function WorkspaceShell() {
   }, []);
 
   useEffect(() => {
-    let active = true;
+    const bootId = ++bootIdRef.current;
 
     async function boot() {
       try {
@@ -36,21 +47,29 @@ export function WorkspaceShell() {
         }
 
         const data = (await response.json()) as SessionSnapshot;
-        if (active) setSession(data);
+        if (bootId !== bootIdRef.current) return;
+
+        sessionIdRef.current = data.id;
+        setSession(data);
       } catch (err) {
-        if (active) {
-          setError(err instanceof Error ? err.message : "Failed to start session");
-        }
+        if (bootId !== bootIdRef.current) return;
+        setError(err instanceof Error ? err.message : "Failed to start session");
       } finally {
-        if (active) setLoading(false);
+        if (bootId === bootIdRef.current) setLoading(false);
       }
     }
 
     void boot();
+  }, []);
 
-    return () => {
-      active = false;
-    };
+  useEffect(() => {
+    function closeSession() {
+      const id = sessionIdRef.current;
+      if (id) void destroySession(id);
+    }
+
+    window.addEventListener("pagehide", closeSession);
+    return () => window.removeEventListener("pagehide", closeSession);
   }, []);
 
   useEffect(() => {
@@ -58,20 +77,44 @@ export function WorkspaceShell() {
 
     const interval = setInterval(() => {
       void refresh(session.id);
-    }, 1200);
+    }, controllable ? 800 : 1200);
 
     return () => clearInterval(interval);
-  }, [session?.id, refresh]);
+  }, [session?.id, refresh, controllable]);
 
   useEffect(() => {
-    return () => {
-      if (!session?.id) return;
-      void fetch(`/api/session/${session.id}`, { method: "DELETE" });
-    };
-  }, [session?.id]);
+    if (waiting) setManualControl(false);
+  }, [waiting]);
+
+  async function handleControl(action: {
+    type: "click" | "type" | "key" | "scroll";
+    x?: number;
+    y?: number;
+    text?: string;
+    key?: string;
+    deltaY?: number;
+  }) {
+    if (!session) return;
+
+    const response = await fetch(`/api/session/${session.id}/control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(action),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? "Control action failed");
+    }
+
+    const data = (await response.json()) as SessionSnapshot;
+    setSession(data);
+  }
 
   async function handleSend(message: string) {
     if (!session) return;
+
+    setManualControl(false);
 
     const response = await fetch(`/api/session/${session.id}/chat`, {
       method: "POST",
@@ -79,12 +122,13 @@ export function WorkspaceShell() {
       body: JSON.stringify({ message }),
     });
 
+    const body = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
       throw new Error(body.error ?? "Failed to send message");
     }
 
-    await refresh(session.id);
+    setSession(body as SessionSnapshot);
   }
 
   async function handleResume() {
@@ -103,6 +147,36 @@ export function WorkspaceShell() {
     setSession(data);
   }
 
+  async function handleEndSession() {
+    const id = sessionIdRef.current;
+    if (!id) return;
+
+    await destroySession(id);
+    sessionIdRef.current = null;
+    setSession(null);
+    setManualControl(false);
+    setLoading(true);
+    setError(null);
+
+    const response = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startUrl: "https://duckduckgo.com" }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "Failed to start session");
+      setLoading(false);
+      return;
+    }
+
+    const data = (await response.json()) as SessionSnapshot;
+    sessionIdRef.current = data.id;
+    setSession(data);
+    setLoading(false);
+  }
+
   return (
     <div className="flex h-screen flex-col bg-background dot-grid">
       <header className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
@@ -110,9 +184,16 @@ export function WorkspaceShell() {
           <div className="size-2 rounded-full bg-foreground" />
           <span className="text-sm font-medium tracking-tight">Synchronicity</span>
         </Link>
-        <p className="font-mono text-xs text-muted-foreground">
-          {session?.status ?? "booting"}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="font-mono text-xs text-muted-foreground">
+            {controllable ? "you control" : session?.status ?? "booting"}
+          </p>
+          {session && (
+            <Button variant="outline" size="sm" onClick={() => void handleEndSession()}>
+              End session
+            </Button>
+          )}
+        </div>
       </header>
 
       {error ? (
@@ -121,8 +202,20 @@ export function WorkspaceShell() {
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
-          <BrowserPanel session={session} loading={loading} />
-          <ChatPanel session={session} onSend={handleSend} onResume={handleResume} />
+          <BrowserPanel
+            session={session}
+            loading={loading}
+            controllable={controllable}
+            manualControl={manualControl}
+            onToggleControl={() => setManualControl((value) => !value)}
+            onControl={handleControl}
+          />
+          <ChatPanel
+            session={session}
+            onSend={handleSend}
+            onResume={handleResume}
+            onFocusInput={() => setManualControl(false)}
+          />
         </div>
       )}
     </div>

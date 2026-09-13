@@ -9,16 +9,18 @@ type ChatPanelProps = {
   session: SessionSnapshot | null;
   onSend: (message: string) => Promise<void>;
   onResume: () => Promise<void>;
+  onFocusInput?: () => void;
 };
 
-export function ChatPanel({ session, onSend, onResume }: ChatPanelProps) {
+export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const isRunning = session?.status === "running";
   const waiting = session?.status === "waiting_for_user";
-  const disabled = !session || isRunning || sending;
+  const disabled = !session || isRunning || sending || waiting;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,10 +32,14 @@ export function ChatPanel({ session, onSend, onResume }: ChatPanelProps) {
     if (!message || disabled) return;
 
     setSending(true);
+    setSendError(null);
     setInput("");
 
     try {
       await onSend(message);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "Failed to send message");
+      setInput(message);
     } finally {
       setSending(false);
     }
@@ -77,7 +83,7 @@ export function ChatPanel({ session, onSend, onResume }: ChatPanelProps) {
       {waiting && (
         <div className="border-t border-border px-4 py-3">
           <p className="mb-3 text-sm text-muted-foreground">
-            {session?.waitReason ?? "The agent paused for human help."}
+            {session?.waitReason ?? "The agent paused for human help."} Use the browser panel, then resume.
           </p>
           <Button className="w-full" onClick={() => void onResume()}>
             <Hand className="size-4" />
@@ -87,11 +93,15 @@ export function ChatPanel({ session, onSend, onResume }: ChatPanelProps) {
       )}
 
       <form onSubmit={(event) => void handleSubmit(event)} className="border-t border-border p-4">
+        {sendError && (
+          <p className="mb-2 text-xs text-destructive">{sendError}</p>
+        )}
         <div className="flex items-end gap-2 rounded-xl border border-border bg-background/60 p-2">
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Search for OpenAI Agents SDK and open the quickstart page…"
+            onFocus={onFocusInput}
+            placeholder="Open the OpenAI Agents SDK quickstart page…"
             rows={3}
             disabled={disabled}
             className="min-h-[72px] flex-1 resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"

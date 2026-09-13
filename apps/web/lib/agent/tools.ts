@@ -2,6 +2,21 @@ import { tool } from '@openai/agents';
 import { z } from 'zod';
 import type { PlaywrightComputer } from './computer';
 
+export function createNavigateTool(computer: PlaywrightComputer) {
+  return tool({
+    name: 'navigate',
+    description:
+      'Go directly to a URL. Use this instead of search when you know the destination (docs, official sites).',
+    parameters: z.object({
+      url: z.string().describe('Full URL including https://'),
+    }),
+    execute: async ({ url }) => {
+      await computer.goto(url);
+      return `Navigated to ${url}`;
+    },
+  });
+}
+
 //! Agent calls this when it hits a CAPTCHA, login wall, or any step that needs a human
 export function createRequestUserControlTool(computer: PlaywrightComputer) {
   return tool({

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSessionSnapshot, runSessionTask } from '@/lib/agent/session';
+import { getSessionSnapshot, runSessionTask, startSessionTask } from '@/lib/agent/session';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,9 +23,14 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Agent is already running' }, { status: 409 });
     }
 
+    const snapshot = startSessionTask(id, message);
+    if (!snapshot) {
+      return NextResponse.json({ error: 'Could not start task' }, { status: 409 });
+    }
+
     void runSessionTask(id, message);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(snapshot);
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to start task';
     return NextResponse.json({ error: msg }, { status: 500 });

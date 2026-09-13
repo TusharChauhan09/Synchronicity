@@ -1,4 +1,4 @@
-import { chromium, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { resolve } from 'node:path';
@@ -46,20 +46,34 @@ const KEY_MAP: Record<string, string> = {
 function toPlaywrightKey(key: string): string {
   const mapped = KEY_MAP[key.toUpperCase()];
   if (mapped) return mapped;
+  if (/^Arrow/.test(key) || ['Enter', 'Backspace', 'Tab', 'Delete', 'Escape'].includes(key)) {
+    return key;
+  }
   if (key.length === 1) return key;
   return key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
 }
 
 type LaunchOptions = {
   headless?: boolean;
+  useProfile?: boolean;
 };
 
 type UserControlHandler = (reason: string) => Promise<void>;
 
 export class PlaywrightComputer implements Computer {
+  private browser?: Browser;
   private context!: BrowserContext;
   private page!: Page;
   private userControlHandler?: UserControlHandler;
+  private persistent = false;
+  private opQueue: Promise<unknown> = Promise.resolve();
+
+  //! Serializes page ops so polling screenshots don't race the agent
+  private runOp<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.opQueue.then(fn, fn);
+    this.opQueue = next.catch(() => {});
+    return next;
+  }
 
   public environment: Environment = 'browser';
   public dimensions: [number, number] = [1280, 800];
@@ -71,24 +85,39 @@ export class PlaywrightComputer implements Computer {
   // Lifecycle
   async launch(startUrl: string = 'https://duckduckgo.com', options: LaunchOptions = {}) {
     const headless = options.headless ?? false;
-
-    //! Persistent profile + realistic UA reduce bot-detection between runs
-    this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
-      headless,
+    const useProfile = options.useProfile ?? !headless;
+    const contextOptions = {
       viewport: { width: this.dimensions[0], height: this.dimensions[1] },
       userAgent: USER_AGENT,
-    });
+    };
+
+    if (useProfile) {
+      //! Persistent profile reduces bot-detection for CLI runs
+      this.persistent = true;
+      this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
+        headless,
+        ...contextOptions,
+      });
+      this.page = this.context.pages()[0] ?? (await this.context.newPage());
+    } else {
+      //! Ephemeral headless context — no shared profile lock for the web UI
+      this.browser = await chromium.launch({ headless });
+      this.context = await this.browser.newContext(contextOptions);
+      this.page = await this.context.newPage();
+    }
 
     await this.context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-    this.page = this.context.pages()[0] ?? (await this.context.newPage());
     await this.page.goto(startUrl, { waitUntil: 'domcontentloaded' });
   }
 
   async close() {
     await this.context.close();
+    if (!this.persistent) {
+      await this.browser?.close();
+    }
   }
 
   //! Keeps the browser window open until the user presses Enter in the terminal
@@ -105,8 +134,10 @@ export class PlaywrightComputer implements Computer {
 
   // Human-in-the-loop 
   async isBlocked(): Promise<boolean> {
-    const content = await this.page.content();
-    return BLOCK_PATTERNS.some((pattern) => pattern.test(content));
+    return this.runOp(async () => {
+      const content = await this.page.content();
+      return BLOCK_PATTERNS.some((pattern) => pattern.test(content));
+    });
   }
 
   async waitForUserControl(reason: string): Promise<void> {
@@ -134,73 +165,85 @@ export class PlaywrightComputer implements Computer {
   }
 
   async screenshot(): Promise<string> {
-    const buffer = await this.page.screenshot({ type: 'png' });
-    //! Return raw base64 — SDK wraps it as data:image/png;base64,...
-    return buffer.toString('base64');
+    return this.runOp(async () => {
+      const buffer = await this.page.screenshot({ type: 'png' });
+      //! Return raw base64 — SDK wraps it as data:image/png;base64,...
+      return buffer.toString('base64');
+    });
   }
 
   async click(x: number, y: number, button: Button): Promise<void> {
-    if (button === 'back') {
-      await this.page.goBack();
-      return;
-    }
-    if (button === 'forward') {
-      await this.page.goForward();
-      return;
-    }
+    return this.runOp(async () => {
+      if (button === 'back') {
+        await this.page.goBack();
+        return;
+      }
+      if (button === 'forward') {
+        await this.page.goForward();
+        return;
+      }
 
-    const playwrightButton =
-      button === 'right' ? 'right' : button === 'wheel' ? 'middle' : 'left';
+      const playwrightButton =
+        button === 'right' ? 'right' : button === 'wheel' ? 'middle' : 'left';
 
-    await this.page.mouse.click(x, y, { button: playwrightButton });
+      await this.page.mouse.click(x, y, { button: playwrightButton });
+    });
   }
 
   async doubleClick(x: number, y: number): Promise<void> {
-    await this.page.mouse.dblclick(x, y);
+    return this.runOp(() => this.page.mouse.dblclick(x, y));
   }
 
   async move(x: number, y: number): Promise<void> {
-    await this.page.mouse.move(x, y);
+    return this.runOp(() => this.page.mouse.move(x, y));
   }
 
   async drag(path: [number, number][]): Promise<void> {
-    const start = path[0];
-    if (!start) return;
+    return this.runOp(async () => {
+      const start = path[0];
+      if (!start) return;
 
-    const [startX, startY] = start;
-    await this.page.mouse.move(startX, startY);
-    await this.page.mouse.down();
+      const [startX, startY] = start;
+      await this.page.mouse.move(startX, startY);
+      await this.page.mouse.down();
 
-    for (const [x, y] of path.slice(1)) {
-      await this.page.mouse.move(x, y);
-    }
+      for (const [x, y] of path.slice(1)) {
+        await this.page.mouse.move(x, y);
+      }
 
-    await this.page.mouse.up();
+      await this.page.mouse.up();
+    });
   }
 
   async type(text: string): Promise<void> {
-    await this.page.keyboard.type(text);
+    return this.runOp(() => this.page.keyboard.type(text));
   }
 
   async keypress(keys: string[]): Promise<void> {
     if (keys.length === 0) return;
-    await this.page.keyboard.press(keys.map(toPlaywrightKey).join('+'));
+    return this.runOp(() =>
+      this.page.keyboard.press(keys.map(toPlaywrightKey).join('+')),
+    );
   }
 
   async scroll(x: number, y: number, scrollX: number, scrollY: number): Promise<void> {
-    await this.page.mouse.move(x, y);
-    await this.page.mouse.wheel(scrollX, scrollY);
+    return this.runOp(async () => {
+      await this.page.mouse.move(x, y);
+      await this.page.mouse.wheel(scrollX, scrollY);
+    });
   }
 
   async wait(): Promise<void> {
-    await this.page.waitForTimeout(1000);
+    return this.runOp(() => this.page.waitForTimeout(1000));
   }
 
   async goto(url: string) {
-    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    return this.runOp(() =>
+      this.page.goto(url, { waitUntil: 'domcontentloaded' }),
+    );
   }
 
   async getCurrentUrl(): Promise<string> {
-    return this.page.url();
+    return this.runOp(async () => this.page.url());
   }
 }

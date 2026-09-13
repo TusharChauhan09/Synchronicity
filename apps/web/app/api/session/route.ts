@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createSession } from '@/lib/agent/session';
+import { getOrCreateSession } from '@/lib/agent/session';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const startUrl = typeof body.startUrl === 'string' ? body.startUrl : undefined;
-    const session = await createSession(startUrl);
+    const session = await getOrCreateSession(startUrl);
 
     return NextResponse.json(session);
   } catch (error) {
