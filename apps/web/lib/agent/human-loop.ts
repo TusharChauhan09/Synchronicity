@@ -2,6 +2,7 @@ import { tool } from '@openai/agents';
 import { z } from 'zod';
 import type { PlaywrightComputer } from './computer';
 
+//! Agent calls this when it hits a CAPTCHA, login wall, or any step that needs a human
 export function createRequestUserControlTool(computer: PlaywrightComputer) {
   return tool({
     name: 'request_user_control',

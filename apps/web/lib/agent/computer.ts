@@ -4,6 +4,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { resolve } from 'node:path';
 import type { Computer } from '@openai/agents';
 
+// Types & constants
 type Environment = 'mac' | 'windows' | 'ubuntu' | 'browser';
 type Button = 'left' | 'right' | 'wheel' | 'back' | 'forward';
 
@@ -12,6 +13,7 @@ const USER_AGENT =
 
 const PROFILE_DIR = resolve(process.cwd(), '.browser-profile');
 
+//? Heuristic checks for common bot-wall patterns
 const BLOCK_PATTERNS = [
   /unusual traffic/i,
   /captcha/i,
@@ -20,6 +22,7 @@ const BLOCK_PATTERNS = [
   /before you continue/i,
 ];
 
+//! OpenAI sends uppercase keys (ENTER); Playwright expects Enter / Control+Key
 const KEY_MAP: Record<string, string> = {
   ENTER: 'Enter',
   RETURN: 'Enter',
@@ -54,7 +57,9 @@ export class PlaywrightComputer implements Computer {
   public environment: Environment = 'browser';
   public dimensions: [number, number] = [1280, 800];
 
+  // Lifecycle
   async launch(startUrl: string = 'https://duckduckgo.com') {
+    //! Persistent profile + realistic UA reduce bot-detection between runs
     this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
       headless: false,
       viewport: { width: this.dimensions[0], height: this.dimensions[1] },
@@ -69,11 +74,17 @@ export class PlaywrightComputer implements Computer {
     await this.page.goto(startUrl, { waitUntil: 'domcontentloaded' });
   }
 
+  async close() {
+    await this.context.close();
+  }
+
+  // Human-in-the-loop 
   async isBlocked(): Promise<boolean> {
     const content = await this.page.content();
     return BLOCK_PATTERNS.some((pattern) => pattern.test(content));
   }
 
+  //? CLI pause for now — swap for UI signal in the Next.js app later
   async waitForUserControl(reason: string): Promise<void> {
     console.log('\n--- Human control needed ---');
     console.log(reason);
@@ -93,6 +104,7 @@ export class PlaywrightComputer implements Computer {
 
   async screenshot(): Promise<string> {
     const buffer = await this.page.screenshot({ type: 'png' });
+    //! Return raw base64 — SDK wraps it as data:image/png;base64,...
     return buffer.toString('base64');
   }
 
@@ -108,6 +120,7 @@ export class PlaywrightComputer implements Computer {
 
     const playwrightButton =
       button === 'right' ? 'right' : button === 'wheel' ? 'middle' : 'left';
+
     await this.page.mouse.click(x, y, { button: playwrightButton });
   }
 
@@ -122,12 +135,15 @@ export class PlaywrightComputer implements Computer {
   async drag(path: [number, number][]): Promise<void> {
     const start = path[0];
     if (!start) return;
+
     const [startX, startY] = start;
     await this.page.mouse.move(startX, startY);
     await this.page.mouse.down();
+
     for (const [x, y] of path.slice(1)) {
       await this.page.mouse.move(x, y);
     }
+
     await this.page.mouse.up();
   }
 
@@ -155,9 +171,5 @@ export class PlaywrightComputer implements Computer {
 
   async getCurrentUrl(): Promise<string> {
     return this.page.url();
-  }
-
-  async close() {
-    await this.context.close();
   }
 }

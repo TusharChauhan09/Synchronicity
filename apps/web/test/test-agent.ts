@@ -14,7 +14,7 @@ async function main() {
 
   const result = await run(
     agent,
-    'Search for "OpenAI Agents SDK" and tell me the title of the first result.',
+    'Search for "OpenAI Agents SDK" and tell me the title of the first result. and click on the link that is offical docs and find me the documentation for quickstart and click at that point and pause at that point / page dont end the browser session',
   );
 
   console.log('--- Agent finished ---');
