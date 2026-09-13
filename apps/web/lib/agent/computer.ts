@@ -50,18 +50,31 @@ function toPlaywrightKey(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
 }
 
+type LaunchOptions = {
+  headless?: boolean;
+};
+
+type UserControlHandler = (reason: string) => Promise<void>;
+
 export class PlaywrightComputer implements Computer {
   private context!: BrowserContext;
   private page!: Page;
+  private userControlHandler?: UserControlHandler;
 
   public environment: Environment = 'browser';
   public dimensions: [number, number] = [1280, 800];
 
+  setUserControlHandler(handler: UserControlHandler) {
+    this.userControlHandler = handler;
+  }
+
   // Lifecycle
-  async launch(startUrl: string = 'https://duckduckgo.com') {
+  async launch(startUrl: string = 'https://duckduckgo.com', options: LaunchOptions = {}) {
+    const headless = options.headless ?? false;
+
     //! Persistent profile + realistic UA reduce bot-detection between runs
     this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
-      headless: false,
+      headless,
       viewport: { width: this.dimensions[0], height: this.dimensions[1] },
       userAgent: USER_AGENT,
     });
@@ -96,8 +109,14 @@ export class PlaywrightComputer implements Computer {
     return BLOCK_PATTERNS.some((pattern) => pattern.test(content));
   }
 
-  //? CLI pause for now — swap for UI signal in the Next.js app later
   async waitForUserControl(reason: string): Promise<void> {
+    if (this.userControlHandler) {
+      await this.userControlHandler(reason);
+      await this.page.waitForTimeout(500);
+      return;
+    }
+
+    //? CLI fallback when not wired to the web UI
     console.log('\n--- Human control needed ---');
     console.log(reason);
 

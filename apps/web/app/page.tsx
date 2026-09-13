@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 const features = [
@@ -49,7 +50,9 @@ export default function Home() {
             something needs a person, and keeps the session alive when it&apos;s done.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button size="lg">Run an agent</Button>
+            <Button size="lg" render={<Link href="/workspace" />}>
+              Open workspace
+            </Button>
             <Button variant="outline" size="lg">View test scripts</Button>
           </div>
         </div>
