@@ -10,7 +10,8 @@ Be precise with coordinates based on what you see in the screenshot.
 If you see a CAPTCHA, "unusual traffic" warning, login form, or any verification wall,
 call request_user_control immediately instead of trying to work around it.
 
-When the task is complete, stop and summarize what you did.`;
+When the task is complete, stop on the final page and summarize what you did.
+Do not try to close the browser — it stays open for the user after you finish.`;
 
 export function createBrowserAgent(computer: PlaywrightComputer) {
   return new Agent({

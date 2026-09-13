@@ -78,6 +78,18 @@ export class PlaywrightComputer implements Computer {
     await this.context.close();
   }
 
+  //! Keeps the browser window open until the user presses Enter in the terminal
+  async keepOpen(message = 'Browser left open — press Enter to close.') {
+    console.log(`\n${message}`);
+    console.log(`Current page: ${this.page.url()}\n`);
+
+    const rl = readline.createInterface({ input, output });
+    await rl.question('');
+    rl.close();
+
+    await this.close();
+  }
+
   // Human-in-the-loop 
   async isBlocked(): Promise<boolean> {
     const content = await this.page.content();
