@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
+import { SiteLoader } from "./site-loader";
 import { Button } from "@/components/ui/button";
 import type { SessionSnapshot } from "@/lib/agent/session";
 
@@ -196,12 +197,16 @@ export function WorkspaceShell() {
         </div>
       </header>
 
-      {error ? (
+      {loading && !session ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center border-t border-border">
+          <SiteLoader label="Starting session" />
+        </div>
+      ) : error ? (
         <div className="flex flex-1 items-center justify-center p-6">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.53fr)]">
+        <div className="grid min-h-0 flex-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(150px,0.35fr)]">
           <div className="min-h-0 p-4">
             <BrowserPanel
               session={session}
