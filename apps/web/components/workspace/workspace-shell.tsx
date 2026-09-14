@@ -206,7 +206,7 @@ export function WorkspaceShell() {
           <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(150px,0.35fr)]">
+        <div className="grid min-h-0 flex-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.42fr)]">
           <div className="min-h-0 p-4">
             <BrowserPanel
               session={session}
@@ -218,7 +218,7 @@ export function WorkspaceShell() {
               onControl={handleControl}
             />
           </div>
-          <div className="min-h-0 border-l border-border p-4">
+          <div className="min-h-0 p-4 pl-0">
             <ChatPanel
               session={session}
               onSend={handleSend}
