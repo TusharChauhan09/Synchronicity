@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Hand, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { SessionSnapshot } from "@/lib/agent/session";
 
 type ChatPanelProps = {
@@ -46,23 +45,25 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/50">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
-        <p className="text-sm font-medium">Agent chat</p>
-        <p className="text-xs text-muted-foreground">Describe what the browser should do</p>
+        <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-foreground">
+          Agent chat
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Describe what the browser should do</p>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {session?.messages.map((message) => (
           <div
             key={message.id}
-            className={message.role === "user" ? "ml-8 text-right" : "mr-8"}
+            className={message.role === "user" ? "ml-6 text-right" : "mr-6"}
           >
             <div
               className={
                 message.role === "user"
-                  ? "inline-block rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-left text-sm text-primary-foreground"
-                  : "inline-block rounded-2xl rounded-tl-md border border-border bg-background/80 px-4 py-2.5 text-left text-sm text-foreground"
+                  ? "inline-block border border-border bg-foreground px-3 py-2 text-left text-sm text-background"
+                  : "inline-block border border-border bg-background px-3 py-2 text-left text-sm text-foreground"
               }
             >
               {message.content}
@@ -71,7 +72,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
         ))}
 
         {isRunning && (
-          <div className="mr-8 flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="mr-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             Agent is working…
           </div>
@@ -85,10 +86,14 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
           <p className="mb-3 text-sm text-muted-foreground">
             {session?.waitReason ?? "The agent paused for human help."} Use the browser panel, then resume.
           </p>
-          <Button className="w-full" onClick={() => void onResume()}>
-            <Hand className="size-4" />
+          <button
+            type="button"
+            onClick={() => void onResume()}
+            className="flex w-full items-center justify-center gap-2 border border-border bg-foreground px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-background transition-colors hover:bg-foreground/90"
+          >
+            <Hand className="size-3.5" />
             Resume agent
-          </Button>
+          </button>
         </div>
       )}
 
@@ -96,7 +101,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
         {sendError && (
           <p className="mb-2 text-xs text-destructive">{sendError}</p>
         )}
-        <div className="flex items-end gap-2 rounded-xl border border-border bg-background/60 p-2">
+        <div className="flex items-end gap-2 border border-border bg-background p-2">
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -104,7 +109,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
             placeholder="Open the OpenAI Agents SDK quickstart page…"
             rows={3}
             disabled={disabled}
-            className="min-h-[72px] flex-1 resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            className="min-h-18 flex-1 resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -112,14 +117,13 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
               }
             }}
           />
-          <Button
+          <button
             type="submit"
-            size="icon"
             disabled={disabled || !input.trim()}
-            className="shrink-0"
+            className="flex size-8 shrink-0 items-center justify-center border border-border bg-foreground text-background transition-colors hover:bg-foreground/90 disabled:pointer-events-none disabled:opacity-40"
           >
             <ArrowUp className="size-4" />
-          </Button>
+          </button>
         </div>
       </form>
     </section>

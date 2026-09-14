@@ -201,21 +201,26 @@ export function WorkspaceShell() {
           <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
-          <BrowserPanel
-            session={session}
-            loading={loading}
-            controllable={controllable}
-            manualControl={manualControl}
-            onToggleControl={() => setManualControl((value) => !value)}
-            onControl={handleControl}
-          />
-          <ChatPanel
-            session={session}
-            onSend={handleSend}
-            onResume={handleResume}
-            onFocusInput={() => setManualControl(false)}
-          />
+        <div className="grid min-h-0 flex-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.53fr)]">
+          <div className="min-h-0 p-4">
+            <BrowserPanel
+              session={session}
+              loading={loading}
+              controllable={controllable}
+              manualControl={manualControl}
+              onToggleControl={() => setManualControl((value) => !value)}
+              onClose={() => void handleEndSession()}
+              onControl={handleControl}
+            />
+          </div>
+          <div className="min-h-0 border-l border-border p-4">
+            <ChatPanel
+              session={session}
+              onSend={handleSend}
+              onResume={handleResume}
+              onFocusInput={() => setManualControl(false)}
+            />
+          </div>
         </div>
       )}
     </div>

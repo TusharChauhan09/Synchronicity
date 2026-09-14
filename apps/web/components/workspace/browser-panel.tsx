@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Globe, Loader2, MousePointer2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, MousePointer2, X } from "lucide-react";
 import { mapClickToViewport } from "@/lib/agent/control";
 import type { SessionSnapshot } from "@/lib/agent/session";
 
@@ -18,12 +17,21 @@ const SPECIAL_KEYS = new Set([
   "Delete",
 ]);
 
+export type BrowserTab = {
+  id: string;
+  url: string;
+};
+
 type BrowserPanelProps = {
   session: SessionSnapshot | null;
   loading: boolean;
   controllable: boolean;
   manualControl: boolean;
+  tabs?: BrowserTab[];
+  activeTabId?: string;
   onToggleControl: () => void;
+  onClose: (tabId: string) => void;
+  onTabSelect?: (tabId: string) => void;
   onControl: (action: {
     type: "click" | "type" | "key" | "scroll";
     x?: number;
@@ -39,16 +47,27 @@ export function BrowserPanel({
   loading,
   controllable,
   manualControl,
+  tabs,
+  activeTabId,
   onToggleControl,
+  onClose,
+  onTabSelect,
   onControl,
 }: BrowserPanelProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const screenshot = session?.screenshot;
-  const url = session?.url ?? "about:blank";
   const isRunning = session?.status === "running";
   const waiting = session?.status === "waiting_for_user";
+
+  const resolvedTabs: BrowserTab[] =
+    tabs ??
+    (session
+      ? [{ id: session.id, url: session.url ?? "about:blank" }]
+      : [{ id: "boot", url: "about:blank" }]);
+
+  const activeId = activeTabId ?? resolvedTabs[0]?.id;
 
   const wasControllable = useRef(false);
 
@@ -104,25 +123,69 @@ export function BrowserPanel({
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/50">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <Globe className="size-4 shrink-0 text-muted-foreground" />
-        <p className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{url}</p>
-        <Button
-          variant={manualControl || waiting ? "default" : "outline"}
-          size="sm"
-          onClick={onToggleControl}
-          disabled={isRunning || waiting}
-        >
-          <MousePointer2 className="size-3.5" />
-          {manualControl ? "Controlling" : "Take control"}
-        </Button>
-        {(loading || isRunning) && (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        )}
+    <section className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-card">
+      {/* Tab strip — one box per browser instance */}
+      <div className="flex shrink-0 flex-wrap items-end gap-0 border-b border-border bg-[oklch(0.13_0.008_285)] px-2 pt-2">
+        {resolvedTabs.map((tab) => {
+          const isActive = tab.id === activeId;
+
+          return (
+            <div
+              key={tab.id}
+              className={`flex h-9 min-w-[200px] max-w-sm flex-1 items-stretch border border-border ${
+                isActive
+                  ? "-mb-px z-10 border-b-card bg-card"
+                  : "mb-0 bg-[oklch(0.11_0.007_285)]"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onTabSelect?.(tab.id)}
+                className="min-w-0 flex-1 truncate px-3 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {tab.url}
+              </button>
+              <button
+                type="button"
+                onClick={() => onClose(tab.id)}
+                disabled={!session}
+                aria-label={`Close ${tab.url}`}
+                className="flex w-9 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40"
+              >
+                <X className="size-3.5" strokeWidth={2.5} />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[oklch(0.09_0.006_285)] p-4">
+      {/* Toolbar */}
+      <div className="flex h-8 shrink-0 items-center justify-between border-b border-border px-3">
+        <div className="flex items-center gap-2">
+          {(loading || isRunning) && (
+            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          )}
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            {isRunning ? "Agent running" : waiting ? "Waiting for you" : "Idle"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleControl}
+          disabled={isRunning || waiting || !session}
+          className={`flex items-center gap-1.5 border border-border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+            manualControl || waiting
+              ? "bg-foreground text-background"
+              : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <MousePointer2 className="size-3" />
+          {manualControl ? "Controlling" : "Take control"}
+        </button>
+      </div>
+
+      {/* Viewport */}
+      <div className="relative m-3 flex min-h-0 flex-1 border border-border bg-[oklch(0.09_0.006_285)]">
         {screenshot ? (
           <div
             ref={surfaceRef}
@@ -130,8 +193,8 @@ export function BrowserPanel({
             onClick={(event) => void handleClick(event)}
             onKeyDown={(event) => void handleKeyDown(event)}
             onWheel={(event) => void handleWheel(event)}
-            className={`relative max-h-full w-full outline-none ${
-              controllable ? "cursor-figma ring-1 ring-primary/30 rounded-md" : ""
+            className={`relative h-full w-full outline-none ${
+              controllable ? "cursor-control ring-1 ring-inset ring-primary/40" : ""
             }`}
           >
             <img
@@ -139,21 +202,25 @@ export function BrowserPanel({
               src={`data:image/png;base64,${screenshot}`}
               alt="Browser view"
               draggable={false}
-              className="pointer-events-none max-h-full w-full rounded-md border border-border object-contain shadow-2xl select-none"
+              className="pointer-events-none h-full w-full object-contain select-none"
             />
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Starting browser session…</p>
+          <div className="flex flex-1 items-center justify-center">
+            <p className="border border-border bg-background/40 px-6 py-4 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              Starting browser session…
+            </p>
+          </div>
         )}
 
         {waiting && (
-          <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
             Click to focus, type directly on the page, then press Resume in chat.
           </div>
         )}
 
         {controllable && !waiting && (
-          <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-lg border border-border bg-background/80 px-4 py-2 text-xs text-muted-foreground">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-border bg-background/90 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             Click to focus — type, scroll, and use arrow keys directly here.
           </div>
         )}
