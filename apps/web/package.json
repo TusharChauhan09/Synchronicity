@@ -8,17 +8,20 @@
     "start": "next start",
     "lint": "eslint",
     "test:agent": "tsx test/test-agent.ts",
-    "test:computer": "tsx test/test-computer.ts"
+    "test:computer": "tsx test/test-computer.ts",
+    "auth:migrate": "npx @better-auth/cli@1.7.5 migrate --config ./lib/auth.ts -y"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@openai/agents": "^0.17.0",
+    "better-auth": "^1.7.5",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "lucide-react": "^1.42.0",
     "motion": "^13.3.0",
     "next": "16.3.4",
     "openai": "^7.10.0",
+    "pg": "^8.23.0",
     "playwright": "^1.63.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -29,6 +32,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
