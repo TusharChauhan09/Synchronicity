@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { cn } from "cn";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 
 const features = [
   {
     title: "Human-in-the-loop",
     description:
-      "CAPTCHAs, logins, and verification walls pause the agent and hand control to you.",
+      "CAPTCHAs, logins, and verification walls pause the agent and hand control back to you.",
   },
   {
     title: "Persistent sessions",
@@ -24,19 +25,7 @@ export default function Home() {
   return (
     <div className="relative flex min-h-full flex-1 flex-col dot-grid">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 glow-top" />
-
-      <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2.5">
-          <div className="size-2 rounded-full bg-foreground" />
-          <span className="text-sm font-medium tracking-tight">Synchronicity</span>
-        </div>
-        <nav className="flex items-center gap-2">
-          <Button variant="ghost" size="sm">Docs</Button>
-          <Link href="/workspace" className={cn(buttonVariants({ size: "sm" }))}>
-            Get started
-          </Link>
-        </nav>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 pb-20 pt-16">
         <div className="max-w-2xl">
@@ -75,7 +64,6 @@ export default function Home() {
             </article>
           ))}
         </section>
-
       </main>
     </div>
   );

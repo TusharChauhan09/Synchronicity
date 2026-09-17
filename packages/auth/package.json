@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/auth.ts",
+    "./client": "./src/client.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
@@ -12,6 +13,9 @@
   "dependencies": {
     "@repo/db": "*",
     "better-auth": "^1.7.5"
+  },
+  "peerDependencies": {
+    "react": ">=18"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",

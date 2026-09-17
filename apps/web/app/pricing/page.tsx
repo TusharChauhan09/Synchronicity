@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { CheckoutButton } from "@/components/checkout-button";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "cn";
+import { SiteHeader } from "@/components/site-header";
 
 const plan = {
   name: "Pro",
@@ -19,15 +17,7 @@ const plan = {
 export default function PricingPage() {
   return (
     <div className="relative flex min-h-full flex-1 flex-col dot-grid">
-      <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="size-2 rounded-full bg-foreground" />
-          <span className="text-sm font-medium tracking-tight">Synchronicity</span>
-        </Link>
-        <Link href="/workspace" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          Workspace
-        </Link>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 pb-20 pt-10">
         <div className="max-w-xl">

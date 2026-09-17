@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@repo/auth/client";
 
 export function SiteHeader() {
   const router = useRouter();

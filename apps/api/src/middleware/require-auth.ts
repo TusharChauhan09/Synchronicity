@@ -1,6 +1,5 @@
 import type { RequestHandler } from 'express';
-import { fromNodeHeaders } from 'better-auth/node';
-import { getSession } from '@repo/auth';
+import { fromNodeHeaders, getSession } from '@repo/auth';
 
 export const requireAuth: RequestHandler = async (req, res, next) => {
   try {

@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
 import { SiteLoader } from "./site-loader";
 import { Button } from "@/components/ui/button";
+import { api, ApiError } from "@/lib/api";
+import { authClient } from "@repo/auth/client";
 import type { SessionSnapshot } from "@/lib/session-types";
 
 async function destroySession(sessionId: string) {
-  await fetch(`/api/session/${sessionId}`, { method: "DELETE" });
+  await api(`/api/session/${sessionId}`, { method: "DELETE" }).catch(() => undefined);
 }
 
 export function WorkspaceShell() {
+  const router = useRouter();
   const [session, setSession] = useState<SessionSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,11 +28,12 @@ export function WorkspaceShell() {
   const controllable = Boolean(session && !loading && (waiting || (manualControl && session.status === "idle")));
 
   const refresh = useCallback(async (sessionId: string) => {
-    const response = await fetch(`/api/session/${sessionId}`);
-    if (!response.ok) return;
-
-    const data = (await response.json()) as SessionSnapshot;
-    setSession(data);
+    try {
+      const data = await api<SessionSnapshot>(`/api/session/${sessionId}`);
+      setSession(data);
+    } catch {
+      // Polling can miss a closed session; the next user action will surface it.
+    }
   }, []);
 
   useEffect(() => {
@@ -36,24 +41,21 @@ export function WorkspaceShell() {
 
     async function boot() {
       try {
-        const response = await fetch("/api/session", {
+        const data = await api<SessionSnapshot>("/api/session", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ startUrl: "https://duckduckgo.com" }),
         });
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error ?? "Failed to start session");
-        }
-
-        const data = (await response.json()) as SessionSnapshot;
         if (bootId !== bootIdRef.current) return;
 
         sessionIdRef.current = data.id;
         setSession(data);
       } catch (err) {
         if (bootId !== bootIdRef.current) return;
+        if (err instanceof ApiError && err.status === 401) {
+          router.replace("/login?next=/workspace");
+          return;
+        }
         setError(err instanceof Error ? err.message : "Failed to start session");
       } finally {
         if (bootId === bootIdRef.current) setLoading(false);
@@ -61,7 +63,7 @@ export function WorkspaceShell() {
     }
 
     void boot();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     function closeSession() {
@@ -97,18 +99,10 @@ export function WorkspaceShell() {
   }) {
     if (!session) return;
 
-    const response = await fetch(`/api/session/${session.id}/control`, {
+    const data = await api<SessionSnapshot>(`/api/session/${session.id}/control`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(action),
     });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? "Control action failed");
-    }
-
-    const data = (await response.json()) as SessionSnapshot;
     setSession(data);
   }
 
@@ -117,34 +111,19 @@ export function WorkspaceShell() {
 
     setManualControl(false);
 
-    const response = await fetch(`/api/session/${session.id}/chat`, {
+    const body = await api<SessionSnapshot>(`/api/session/${session.id}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
     });
-
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(body.error ?? "Failed to send message");
-    }
-
-    setSession(body as SessionSnapshot);
+    setSession(body);
   }
 
   async function handleResume() {
     if (!session) return;
 
-    const response = await fetch(`/api/session/${session.id}/resume`, {
+    const data = await api<SessionSnapshot>(`/api/session/${session.id}/resume`, {
       method: "POST",
     });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? "Failed to resume");
-    }
-
-    const data = (await response.json()) as SessionSnapshot;
     setSession(data);
   }
 
@@ -159,23 +138,23 @@ export function WorkspaceShell() {
     setLoading(true);
     setError(null);
 
-    const response = await fetch("/api/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ startUrl: "https://duckduckgo.com" }),
-    });
+    try {
+      const data = await api<SessionSnapshot>("/api/session", {
+        method: "POST",
+        body: JSON.stringify({ startUrl: "https://duckduckgo.com" }),
+      });
 
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      setError(body.error ?? "Failed to start session");
+      sessionIdRef.current = data.id;
+      setSession(data);
       setLoading(false);
-      return;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login?next=/workspace");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to start session");
+      setLoading(false);
     }
-
-    const data = (await response.json()) as SessionSnapshot;
-    sessionIdRef.current = data.id;
-    setSession(data);
-    setLoading(false);
   }
 
   return (
@@ -194,6 +173,15 @@ export function WorkspaceShell() {
               End session
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              void authClient.signOut().then(() => router.push("/"));
+            }}
+          >
+            Sign out
+          </Button>
         </div>
       </header>
 

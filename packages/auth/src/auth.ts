@@ -2,6 +2,8 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { prisma } from '@repo/db';
 
+export { toNodeHandler, fromNodeHeaders } from 'better-auth/node';
+
 const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
 export const auth = betterAuth({
@@ -20,3 +22,9 @@ export const auth = betterAuth({
     },
   },
 });
+
+export async function getSession(headers: Headers) {
+  return auth.api.getSession({ headers });
+}
+
+export type Session = typeof auth.$Infer.Session;

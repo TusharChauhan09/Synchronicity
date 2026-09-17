@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const apiUrl = process.env.API_URL ?? "http://localhost:4000";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@repo/auth"],
   async rewrites() {
     return [
       {

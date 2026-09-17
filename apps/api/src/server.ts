@@ -1,7 +1,6 @@
 import cors from 'cors';
 import express from 'express';
-import { toNodeHandler } from 'better-auth/node';
-import { auth } from '@repo/auth';
+import { toNodeHandler, auth } from '@repo/auth';
 import { paymentRoutes } from './routes/payments.js';
 import { sessionRoutes } from './routes/session.js';
 import { webhookRoutes } from './routes/webhooks.js';
