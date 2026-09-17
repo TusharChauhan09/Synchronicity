@@ -4,7 +4,6 @@ import { stdin as input, stdout as output } from 'node:process';
 import { resolve } from 'node:path';
 import type { Computer } from '@openai/agents';
 
-// Types & constants
 type Environment = 'mac' | 'windows' | 'ubuntu' | 'browser';
 type Button = 'left' | 'right' | 'wheel' | 'back' | 'forward';
 
@@ -13,7 +12,6 @@ const USER_AGENT =
 
 const PROFILE_DIR = resolve(process.cwd(), '.browser-profile');
 
-//? Heuristic checks for common bot-wall patterns
 const BLOCK_PATTERNS = [
   /unusual traffic/i,
   /captcha/i,
@@ -22,7 +20,6 @@ const BLOCK_PATTERNS = [
   /before you continue/i,
 ];
 
-//! OpenAI sends uppercase keys (ENTER); Playwright expects Enter / Control+Key
 const KEY_MAP: Record<string, string> = {
   ENTER: 'Enter',
   RETURN: 'Enter',
@@ -68,7 +65,6 @@ export class PlaywrightComputer implements Computer {
   private persistent = false;
   private opQueue: Promise<unknown> = Promise.resolve();
 
-  //! Serializes page ops so polling screenshots don't race the agent
   private runOp<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.opQueue.then(fn, fn);
     this.opQueue = next.catch(() => {});
@@ -82,7 +78,6 @@ export class PlaywrightComputer implements Computer {
     this.userControlHandler = handler;
   }
 
-  // Lifecycle
   async launch(startUrl: string = 'https://duckduckgo.com', options: LaunchOptions = {}) {
     const headless = options.headless ?? false;
     const useProfile = options.useProfile ?? !headless;
@@ -92,7 +87,6 @@ export class PlaywrightComputer implements Computer {
     };
 
     if (useProfile) {
-      //! Persistent profile reduces bot-detection for CLI runs
       this.persistent = true;
       this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
         headless,
@@ -100,7 +94,6 @@ export class PlaywrightComputer implements Computer {
       });
       this.page = this.context.pages()[0] ?? (await this.context.newPage());
     } else {
-      //! Ephemeral headless context — no shared profile lock for the web UI
       this.browser = await chromium.launch({ headless });
       this.context = await this.browser.newContext(contextOptions);
       this.page = await this.context.newPage();
@@ -120,7 +113,6 @@ export class PlaywrightComputer implements Computer {
     }
   }
 
-  //! Keeps the browser window open until the user presses Enter in the terminal
   async keepOpen(message = 'Browser left open — press Enter to close.') {
     console.log(`\n${message}`);
     console.log(`Current page: ${this.page.url()}\n`);
@@ -132,7 +124,6 @@ export class PlaywrightComputer implements Computer {
     await this.close();
   }
 
-  // Human-in-the-loop 
   async isBlocked(): Promise<boolean> {
     return this.runOp(async () => {
       const content = await this.page.content();
@@ -147,7 +138,6 @@ export class PlaywrightComputer implements Computer {
       return;
     }
 
-    //? CLI fallback when not wired to the web UI
     console.log('\n--- Human control needed ---');
     console.log(reason);
 
@@ -167,7 +157,6 @@ export class PlaywrightComputer implements Computer {
   async screenshot(): Promise<string> {
     return this.runOp(async () => {
       const buffer = await this.page.screenshot({ type: 'png' });
-      //! Return raw base64 — SDK wraps it as data:image/png;base64,...
       return buffer.toString('base64');
     });
   }

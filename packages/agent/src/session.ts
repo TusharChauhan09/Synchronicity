@@ -1,30 +1,12 @@
 import { run } from '@openai/agents';
-import { createBrowserAgent } from './agent';
-import { PlaywrightComputer } from './computer';
-import type { UserControlAction } from './control';
-
-export type SessionStatus = 'idle' | 'running' | 'waiting_for_user';
-
-export type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  createdAt: string;
-};
-
-export type SessionSnapshot = {
-  id: string;
-  status: SessionStatus;
-  waitReason?: string;
-  url?: string;
-  screenshot?: string;
-  messages: ChatMessage[];
-};
+import type { ChatMessage, SessionSnapshot, UserControlAction } from './lib/types.js';
+import { createBrowserAgent } from './agent.js';
+import { PlaywrightComputer } from './computer.js';
 
 type AgentSession = {
   id: string;
   computer: PlaywrightComputer;
-  status: SessionStatus;
+  status: SessionSnapshot['status'];
   waitReason?: string;
   resumeResolver?: () => void;
   messages: ChatMessage[];

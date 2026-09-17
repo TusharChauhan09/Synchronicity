@@ -1,0 +1,26 @@
+{
+  "name": "@repo/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test:agent": "tsx --env-file=../../apps/api/.env test/test-agent.ts",
+    "test:computer": "tsx test/test-computer.ts"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.17.0",
+    "playwright": "^1.63.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/node": "26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "7.0.2"
+  }
+}

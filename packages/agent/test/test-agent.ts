@@ -1,7 +1,6 @@
-import './load-env';
+import 'dotenv/config';
 import { run } from '@openai/agents';
-import { PlaywrightComputer } from '../lib/agent/computer';
-import { createBrowserAgent } from '../lib/agent/agent';
+import { PlaywrightComputer, createBrowserAgent } from '../src/index.js';
 
 async function main() {
   const computer = new PlaywrightComputer();

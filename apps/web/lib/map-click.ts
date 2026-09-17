@@ -1,10 +1,4 @@
-export const BROWSER_VIEWPORT = { width: 1280, height: 800 };
-
-export type UserControlAction =
-  | { type: 'click'; x: number; y: number }
-  | { type: 'type'; text: string }
-  | { type: 'key'; key: string }
-  | { type: 'scroll'; x: number; y: number; deltaY: number };
+const BROWSER_VIEWPORT = { width: 1280, height: 800 };
 
 export function mapClickToViewport(
   clientX: number,

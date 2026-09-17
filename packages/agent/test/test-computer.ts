@@ -1,5 +1,5 @@
-import { PlaywrightComputer } from '../lib/agent/computer';
-import { writeFileSync } from 'fs';
+import { writeFileSync } from 'node:fs';
+import { PlaywrightComputer } from '../src/index.js';
 
 async function main() {
   const computer = new PlaywrightComputer();

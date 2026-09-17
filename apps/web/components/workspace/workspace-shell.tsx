@@ -6,7 +6,7 @@ import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
 import { SiteLoader } from "./site-loader";
 import { Button } from "@/components/ui/button";
-import type { SessionSnapshot } from "@/lib/agent/session";
+import type { SessionSnapshot } from "@repo/agent/types";
 
 async function destroySession(sessionId: string) {
   await fetch(`/api/session/${sessionId}`, { method: "DELETE" });

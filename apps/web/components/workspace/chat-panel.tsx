@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Hand, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { DotmTriangle1 } from "@/components/ui/dotm-triangle-1";
-import type { SessionSnapshot } from "@/lib/agent/session";
+import type { SessionSnapshot } from "@repo/agent/types";
 
 const STATUS_LINES = ["Thinking", "Figuring", "Browsing", "Working"] as const;
 

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Loader2, MousePointer2, X } from "lucide-react";
-import { mapClickToViewport } from "@/lib/agent/control";
-import type { SessionSnapshot } from "@/lib/agent/session";
+import { mapClickToViewport } from "@/lib/map-click";
+import type { SessionSnapshot } from "@repo/agent/types";
 
 const SPECIAL_KEYS = new Set([
   "Enter",

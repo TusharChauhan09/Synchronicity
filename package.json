@@ -9,7 +9,9 @@
     "check-types": "turbo run check-types",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f postgres"
+    "db:logs": "docker compose logs -f postgres",
+    "db:generate": "npm run db:generate -w @repo/db",
+    "db:push": "npm run db:push -w @repo/db"
   },
   "devDependencies": {
     "prettier": "3.9.6",
