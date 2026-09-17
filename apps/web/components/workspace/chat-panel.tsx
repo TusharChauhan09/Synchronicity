@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Hand, Sparkles } from "lucide-react";
+import { ArrowUp, Hand, Loader2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { DotmTriangle1 } from "@/components/ui/dotm-triangle-1";
-import type { SessionSnapshot } from "@repo/agent/types";
+import type { SessionSnapshot } from "@/lib/session-types";
 
 const STATUS_LINES = ["Thinking", "Figuring", "Browsing", "Working"] as const;
 
@@ -149,15 +148,10 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
                   exit={{ opacity: 0 }}
                   className="flex items-center gap-3"
                 >
-                  <span className="inline-flex size-7 shrink-0 items-center justify-center">
-                    <DotmTriangle1
-                      dotSize={3}
-                      cellPadding={1}
-                      speed={1.2}
-                      muted
-                      ariaLabel={statusLabel}
-                    />
-                  </span>
+                  <Loader2
+                    className="size-4 shrink-0 animate-spin text-muted-foreground"
+                    aria-label={statusLabel}
+                  />
                   <motion.span
                     key={statusLabel}
                     initial={{ opacity: 0, y: 2 }}

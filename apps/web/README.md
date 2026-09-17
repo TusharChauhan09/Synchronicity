@@ -1,20 +1,17 @@
-# @repo/web — Syncro v1
+# @repo/web
 
-The Syncro v1 app lives here. Full documentation (architecture, diagrams, API, limitations) is in the **[root README](../../README.md)**.
+Next.js frontend for Synchronicity. API requests go to `/api/*`, which Next rewrites to the Express server in `apps/api`.
 
 ## Quick start
 
+From the repo root:
+
 ```bash
-cp .env.example .env.local   # add OPENAI_API_KEY
+cp apps/web/.env.example apps/web/.env.local
 npm run dev
 ```
 
 - Landing: [http://localhost:3000](http://localhost:3000)
 - Workspace: [http://localhost:3000/workspace](http://localhost:3000/workspace)
 
-## CLI tests
-
-```bash
-npm run test:agent      # full agent run (headed browser)
-npm run test:computer   # screenshot smoke test
-```
+The API runs separately on port 4000 (`npm run dev` starts both via Turbo).

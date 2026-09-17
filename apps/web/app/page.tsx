@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { cn } from "cn";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 const features = [
   {
@@ -31,7 +32,9 @@ export default function Home() {
         </div>
         <nav className="flex items-center gap-2">
           <Button variant="ghost" size="sm">Docs</Button>
-          <Button size="sm">Get started</Button>
+          <Link href="/workspace" className={cn(buttonVariants({ size: "sm" }))}>
+            Get started
+          </Link>
         </nav>
       </header>
 
@@ -50,10 +53,9 @@ export default function Home() {
             something needs a person, and keeps the session alive when it&apos;s done.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button size="lg" render={<Link href="/workspace" />}>
+            <Link href="/workspace" className={cn(buttonVariants({ size: "lg" }))}>
               Open workspace
-            </Button>
-            <Button variant="outline" size="lg">View test scripts</Button>
+            </Link>
           </div>
         </div>
 
@@ -71,13 +73,6 @@ export default function Home() {
           ))}
         </section>
 
-        <section className="mt-16 rounded-xl border border-border bg-card/40 p-6 font-mono text-sm">
-          <p className="text-muted-foreground">// test from apps/web</p>
-          <p className="mt-2 text-foreground">npx tsx test/test-agent.ts</p>
-          <p className="mt-4 text-muted-foreground">
-            Browser stays open after the agent finishes — press Enter in the terminal to close.
-          </p>
-        </section>
       </main>
     </div>
   );

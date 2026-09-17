@@ -17,6 +17,7 @@ type AgentSession = {
 };
 
 const sessions = new Map<string, AgentSession>();
+let creatingSession: Promise<SessionSnapshot> | null = null;
 
 function createMessage(role: ChatMessage['role'], content: string): ChatMessage {
   return {
@@ -47,7 +48,13 @@ export async function getOrCreateSession(startUrl = 'https://duckduckgo.com'): P
     return getSessionSnapshot(existing.id)!;
   }
 
-  return createSession(startUrl);
+  if (!creatingSession) {
+    creatingSession = createSession(startUrl).finally(() => {
+      creatingSession = null;
+    });
+  }
+
+  return creatingSession;
 }
 
 async function createSession(startUrl = 'https://duckduckgo.com'): Promise<SessionSnapshot> {

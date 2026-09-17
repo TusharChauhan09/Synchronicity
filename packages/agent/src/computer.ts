@@ -103,7 +103,21 @@ export class PlaywrightComputer implements Computer {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-    await this.page.goto(startUrl, { waitUntil: 'domcontentloaded' });
+    const target = startUrl || 'https://duckduckgo.com';
+
+    if (target === 'about:blank') {
+      await this.page.goto('about:blank', { waitUntil: 'commit', timeout: 5_000 });
+      return;
+    }
+
+    try {
+      await this.page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    } catch (error) {
+      await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+      if (this.page.url() === 'about:blank') {
+        throw error;
+      }
+    }
   }
 
   async close() {
