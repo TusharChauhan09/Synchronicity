@@ -56,6 +56,9 @@ export default function Home() {
             <Link href="/workspace" className={cn(buttonVariants({ size: "lg" }))}>
               Open workspace
             </Link>
+            <Link href="/pricing" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>
+              View pricing
+            </Link>
           </div>
         </div>
 

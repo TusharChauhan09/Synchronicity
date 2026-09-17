@@ -7,13 +7,16 @@
     "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "tsc",
     "start": "node --env-file=.env dist/server.js",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "dodo:create-product": "tsx --env-file=.env scripts/create-product.ts"
   },
   "dependencies": {
+    "@dodopayments/express": "^0.2.11",
     "@repo/agent": "*",
     "@repo/auth": "*",
     "better-auth": "^1.7.5",
     "cors": "^2.8.5",
+    "dodopayments": "^2.50.0",
     "dotenv": "^16.0.3",
     "express": "^4.21.2"
   },

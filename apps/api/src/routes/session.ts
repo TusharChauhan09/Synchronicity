@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAuth } from '../middleware/require-auth.js';
 import {
   chatSession,
   controlSession,
@@ -9,6 +10,8 @@ import {
 } from '../controllers/session.controller.js';
 
 export const sessionRoutes = Router();
+
+sessionRoutes.use('/api/session', requireAuth);
 
 sessionRoutes.post('/api/session', createSession);
 sessionRoutes.get('/api/session/:id', getSession);

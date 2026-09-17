@@ -2,10 +2,13 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { prisma } from '@repo/db';
 
+const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: process.env.BETTER_AUTH_URL ?? webOrigin,
   secret: process.env.BETTER_AUTH_SECRET,
+  trustedOrigins: [webOrigin],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID as string,

@@ -5,6 +5,7 @@ import { PlaywrightComputer } from './computer.js';
 
 type AgentSession = {
   id: string;
+  userId: string;
   computer: PlaywrightComputer;
   status: SessionSnapshot['status'];
   waitReason?: string;
@@ -17,7 +18,18 @@ type AgentSession = {
 };
 
 const sessions = new Map<string, AgentSession>();
-let creatingSession: Promise<SessionSnapshot> | null = null;
+const creatingByUser = new Map<string, Promise<SessionSnapshot>>();
+
+function findUserSession(userId: string): AgentSession | undefined {
+  for (const session of sessions.values()) {
+    if (session.userId === userId) return session;
+  }
+  return undefined;
+}
+
+export function sessionBelongsToUser(id: string, userId: string): boolean {
+  return sessions.get(id)?.userId === userId;
+}
 
 function createMessage(role: ChatMessage['role'], content: string): ChatMessage {
   return {
@@ -41,23 +53,30 @@ async function refreshSnapshot(session: AgentSession) {
   }
 }
 
-export async function getOrCreateSession(startUrl = 'https://duckduckgo.com'): Promise<SessionSnapshot> {
-  const existing = sessions.values().next().value as AgentSession | undefined;
+export async function getOrCreateSession(
+  userId: string,
+  startUrl = 'https://duckduckgo.com',
+): Promise<SessionSnapshot> {
+  const existing = findUserSession(userId);
   if (existing) {
     await refreshSnapshot(existing);
     return getSessionSnapshot(existing.id)!;
   }
 
-  if (!creatingSession) {
-    creatingSession = createSession(startUrl).finally(() => {
-      creatingSession = null;
-    });
-  }
+  const pending = creatingByUser.get(userId);
+  if (pending) return pending;
 
-  return creatingSession;
+  const created = createSession(userId, startUrl).finally(() => {
+    creatingByUser.delete(userId);
+  });
+  creatingByUser.set(userId, created);
+  return created;
 }
 
-async function createSession(startUrl = 'https://duckduckgo.com'): Promise<SessionSnapshot> {
+async function createSession(
+  userId: string,
+  startUrl = 'https://duckduckgo.com',
+): Promise<SessionSnapshot> {
   const id = crypto.randomUUID();
   const computer = new PlaywrightComputer();
 
@@ -81,6 +100,7 @@ async function createSession(startUrl = 'https://duckduckgo.com'): Promise<Sessi
 
   const session: AgentSession = {
     id,
+    userId,
     computer,
     status: 'idle',
     messages: [

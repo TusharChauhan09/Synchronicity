@@ -16,5 +16,6 @@ export {
   getSessionSnapshotFresh,
   resumeSession,
   runSessionTask,
+  sessionBelongsToUser,
   startSessionTask,
 } from './session.js';

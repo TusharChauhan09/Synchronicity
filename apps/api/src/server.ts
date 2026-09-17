@@ -1,9 +1,10 @@
-import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from '@repo/auth';
+import { paymentRoutes } from './routes/payments.js';
 import { sessionRoutes } from './routes/session.js';
+import { webhookRoutes } from './routes/webhooks.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -18,7 +19,11 @@ app.use(
 
 app.all('/api/auth/*', toNodeHandler(auth));
 
+app.use(webhookRoutes);
+
 app.use(express.json());
+
+app.use(paymentRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
