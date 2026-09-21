@@ -3,6 +3,7 @@ import express from 'express';
 import { toNodeHandler, auth } from '@repo/auth';
 import { paymentRoutes } from './routes/payments.js';
 import { sessionRoutes } from './routes/session.js';
+import { workspaceRoutes } from './routes/workspace.js';
 import { webhookRoutes } from './routes/webhooks.js';
 
 const app = express();
@@ -29,6 +30,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.use(sessionRoutes);
+app.use(workspaceRoutes);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

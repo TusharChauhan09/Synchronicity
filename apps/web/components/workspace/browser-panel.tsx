@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Loader2, MousePointer2, X } from "lucide-react";
 import { mapClickToViewport } from "@/lib/map-click";
 import type { SessionSnapshot } from "@/lib/session-types";
+import { panelTabClass, panelTabLabelClass, panelTabRowClass } from "./panel-tab-styles";
 
 const SPECIAL_KEYS = new Set([
   "Enter",
@@ -60,6 +61,8 @@ export function BrowserPanel({
   const screenshot = session?.screenshot;
   const isRunning = session?.status === "running";
   const waiting = session?.status === "waiting_for_user";
+
+  const formatUrl = (url: string) => url.replace(/^https?:\/\//, "") || "new tab";
 
   const resolvedTabs: BrowserTab[] =
     tabs ??
@@ -126,30 +129,25 @@ export function BrowserPanel({
     <div className="flex h-full min-h-0 flex-col">
       {/* Tab row + controls — sits flush on top of the outer box */}
       <div className="flex shrink-0 items-end justify-between gap-3">
-        <div className="flex min-w-0 items-end gap-2">
+        <div className={panelTabRowClass()}>
           {resolvedTabs.map((tab) => {
             const isActive = tab.id === activeId;
 
             return (
-              <div
-                key={tab.id}
-                className={`flex h-9 max-w-md shrink-0 items-stretch border border-border ${
-                  isActive ? "bg-card" : "bg-[oklch(0.11_0.007_285)]"
-                }`}
-              >
+              <div key={tab.id} className={panelTabClass(isActive, "browser", "lg")}>
                 <button
                   type="button"
                   onClick={() => onTabSelect?.(tab.id)}
-                  className="min-w-[140px] max-w-[280px] truncate px-3 text-left font-mono text-[11px] text-muted-foreground hover:text-foreground"
+                  className={panelTabLabelClass(isActive, "lg")}
                 >
-                  {tab.url}
+                  {formatUrl(tab.url)}
                 </button>
                 <button
                   type="button"
                   onClick={() => onClose(tab.id)}
-                  disabled={!session}
+                  disabled={!session || resolvedTabs.length <= 1}
                   aria-label={`Close ${tab.url}`}
-                  className="flex w-8 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                  className="flex w-9 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                 >
                   <X className="size-3.5" strokeWidth={2.5} />
                 </button>

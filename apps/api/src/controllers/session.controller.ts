@@ -3,9 +3,12 @@ import type { UserControlAction } from '@repo/agent/types';
 import {
   applyUserControl,
   closeSession,
+  createUserSession,
   getOrCreateSession,
   getSessionSnapshot,
   getSessionSnapshotFresh,
+  listSessionsForUser,
+  renameSession,
   resumeSession,
   runSessionTask,
   sessionBelongsToUser,
@@ -44,18 +47,50 @@ function requireOwnedSession(req: Request, res: Response): { userId: string; id:
   return { userId, id };
 }
 
+export async function listSessions(req: Request, res: Response) {
+  const userId = getUserId(req, res);
+  if (!userId) return;
+
+  res.json(listSessionsForUser(userId));
+}
+
 export async function createSession(req: Request, res: Response) {
   const userId = getUserId(req, res);
   if (!userId) return;
 
   try {
     const startUrl = typeof req.body?.startUrl === 'string' ? req.body.startUrl : undefined;
-    const session = await getOrCreateSession(userId, startUrl);
+    const forceNew = req.body?.forceNew === true;
+    const name = typeof req.body?.name === 'string' ? req.body.name : undefined;
+
+    const session = forceNew
+      ? await createUserSession(userId, startUrl, name)
+      : await getOrCreateSession(userId, startUrl);
+
     res.json(session);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create session';
     res.status(500).json({ error: message });
   }
+}
+
+export async function patchSession(req: Request, res: Response) {
+  const owned = requireOwnedSession(req, res);
+  if (!owned) return;
+
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (!name) {
+    res.status(400).json({ error: 'Name is required' });
+    return;
+  }
+
+  const session = renameSession(owned.id, name);
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' });
+    return;
+  }
+
+  res.json(session);
 }
 
 export async function getSession(req: Request, res: Response) {

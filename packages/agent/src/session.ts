@@ -6,6 +6,7 @@ import { PlaywrightComputer } from './computer.js';
 type AgentSession = {
   id: string;
   userId: string;
+  name: string;
   computer: PlaywrightComputer;
   status: SessionSnapshot['status'];
   waitReason?: string;
@@ -19,6 +20,18 @@ type AgentSession = {
 
 const sessions = new Map<string, AgentSession>();
 const creatingByUser = new Map<string, Promise<SessionSnapshot>>();
+
+function countUserSessions(userId: string): number {
+  let count = 0;
+  for (const session of sessions.values()) {
+    if (session.userId === userId) count += 1;
+  }
+  return count;
+}
+
+function defaultAgentName(userId: string): string {
+  return `Agent ${countUserSessions(userId) + 1}`;
+}
 
 function findUserSession(userId: string): AgentSession | undefined {
   for (const session of sessions.values()) {
@@ -66,16 +79,46 @@ export async function getOrCreateSession(
   const pending = creatingByUser.get(userId);
   if (pending) return pending;
 
-  const created = createSession(userId, startUrl).finally(() => {
+  const created = createUserSession(userId, startUrl).finally(() => {
     creatingByUser.delete(userId);
   });
   creatingByUser.set(userId, created);
   return created;
 }
 
+export async function createUserSession(
+  userId: string,
+  startUrl = 'https://duckduckgo.com',
+  name?: string,
+): Promise<SessionSnapshot> {
+  return createSession(userId, startUrl, name ?? defaultAgentName(userId));
+}
+
+export function listSessionsForUser(userId: string): SessionSnapshot[] {
+  const list: SessionSnapshot[] = [];
+  for (const session of sessions.values()) {
+    if (session.userId !== userId) continue;
+    const snapshot = getSessionSnapshot(session.id);
+    if (snapshot) list.push(snapshot);
+  }
+  return list;
+}
+
+export function renameSession(id: string, name: string): SessionSnapshot | null {
+  const session = sessions.get(id);
+  if (!session) return null;
+
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+
+  session.name = trimmed.slice(0, 64);
+  return getSessionSnapshot(id);
+}
+
 async function createSession(
   userId: string,
   startUrl = 'https://duckduckgo.com',
+  name = 'Agent 1',
 ): Promise<SessionSnapshot> {
   const id = crypto.randomUUID();
   const computer = new PlaywrightComputer();
@@ -101,6 +144,7 @@ async function createSession(
   const session: AgentSession = {
     id,
     userId,
+    name,
     computer,
     status: 'idle',
     messages: [
@@ -125,6 +169,7 @@ export function getSessionSnapshot(id: string): SessionSnapshot | null {
 
   return {
     id: session.id,
+    name: session.name,
     status: session.status,
     waitReason: session.waitReason,
     url: session.lastUrl,
@@ -217,6 +262,18 @@ export function startSessionTask(id: string, prompt: string): SessionSnapshot | 
   session.messages.push(createMessage('user', prompt));
 
   return getSessionSnapshot(id);
+}
+
+export async function runSessionTaskIfIdle(
+  id: string,
+  prompt: string,
+): Promise<SessionSnapshot | null> {
+  const session = sessions.get(id);
+  if (!session) return null;
+  if (session.running || session.status === 'waiting_for_user') {
+    return getSessionSnapshot(id);
+  }
+  return runSessionTask(id, prompt);
 }
 
 export async function runSessionTask(id: string, prompt: string): Promise<SessionSnapshot | null> {

@@ -1,14 +1,53 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Hand, Loader2, Sparkles } from "lucide-react";
+import { ArrowUp, Hand, Link2, Loader2, Pencil, Plus, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import type { SessionSnapshot } from "@/lib/session-types";
+import type { ChatMessage, SessionSnapshot } from "@/lib/session-types";
+import {
+  panelAddTabClass,
+  panelTabClass,
+  panelTabLabelClass,
+  panelTabRowClass,
+} from "./panel-tab-styles";
 
 const STATUS_LINES = ["Thinking", "Figuring", "Browsing", "Working"] as const;
 
+export type ChatAgentTab = {
+  id: string;
+  name: string;
+  status: SessionSnapshot["status"];
+  inWorkspace?: boolean;
+  lockedInOtherWorkspace?: boolean;
+  linkedWorkspaceName?: string;
+};
+
+export type ChatWorkspaceTab = {
+  id: string;
+  name: string;
+  sessionCount: number;
+};
+
 type ChatPanelProps = {
   session: SessionSnapshot | null;
+  title?: string;
+  messages?: ChatMessage[];
+  statusOverride?: SessionSnapshot["status"];
+  viewMode?: "agent" | "workspace";
+  agentTabs?: ChatAgentTab[];
+  activeAgentId?: string | null;
+  workspaceTabs?: ChatWorkspaceTab[];
+  activeWorkspaceId?: string | null;
+  activeWorkspaceName?: string | null;
+  onSelectAgent?: (id: string) => void;
+  onAddAgent?: () => void;
+  onRenameAgent?: (id: string) => void;
+  onLinkAgentToWorkspace?: (agentId: string) => void;
+  onSelectWorkspace?: (id: string) => void;
+  onAddWorkspace?: () => void;
+  onRenameWorkspace?: (id: string) => void;
+  linkError?: string | null;
+  chatReady?: boolean;
   onSend: (message: string) => Promise<void>;
   onResume: () => Promise<void>;
   onFocusInput?: () => void;
@@ -20,7 +59,30 @@ function statusDot(status: SessionSnapshot["status"] | undefined) {
   return "bg-muted-foreground/40";
 }
 
-export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanelProps) {
+export function ChatPanel({
+  session,
+  title = "Agent",
+  messages: messagesOverride,
+  statusOverride,
+  viewMode = "agent",
+  agentTabs = [],
+  activeAgentId,
+  workspaceTabs = [],
+  activeWorkspaceId,
+  activeWorkspaceName,
+  onSelectAgent,
+  onAddAgent,
+  onRenameAgent,
+  onLinkAgentToWorkspace,
+  onSelectWorkspace,
+  onAddWorkspace,
+  onRenameWorkspace,
+  linkError,
+  chatReady: chatReadyProp,
+  onSend,
+  onResume,
+  onFocusInput,
+}: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -28,15 +90,18 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const isRunning = session?.status === "running";
-  const waiting = session?.status === "waiting_for_user";
+  const status = statusOverride ?? session?.status;
+  const messages = messagesOverride ?? session?.messages ?? [];
+  const isRunning = status === "running";
+  const waiting = status === "waiting_for_user";
   const thinking = isRunning || sending;
-  const disabled = !session || thinking || waiting;
-  const hasMessages = (session?.messages.length ?? 0) > 0;
+  const chatReady = chatReadyProp ?? (messagesOverride !== undefined || Boolean(session));
+  const disabled = !chatReady || thinking || waiting;
+  const hasMessages = messages.length > 0;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [session?.messages.length, session?.status, thinking]);
+  }, [messages.length, status, thinking]);
 
   useEffect(() => {
     if (!thinking) {
@@ -79,23 +144,128 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
 
   const statusLabel = sending ? "Sending" : STATUS_LINES[statusIndex];
 
+  const headerTitle =
+    viewMode === "workspace"
+      ? workspaceTabs.find((w) => w.id === activeWorkspaceId)?.name ?? title
+      : agentTabs.find((a) => a.id === activeAgentId)?.name ?? title;
+
+  const composerPlaceholder =
+    viewMode === "workspace"
+      ? "Message all linked agents in this workspace…"
+      : waiting
+        ? "Resume to continue…"
+        : "Ask the agent to browse, search, or act…";
+
   return (
-    <div className="flex h-full min-h-0 flex-col border border-border bg-[oklch(0.11_0.007_285)]">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className={`size-1.5 shrink-0 rounded-full ${statusDot(session?.status)}`}
-            aria-hidden
-          />
-          <span className="text-sm font-medium tracking-tight">Agent</span>
-        </div>
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          {waiting ? "Paused" : isRunning ? "Active" : "Ready"}
-        </span>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className={panelTabRowClass()}>
+        {agentTabs.map((agent) => {
+          const isActive = activeAgentId === agent.id;
+          const linkDisabled =
+            Boolean(agent.lockedInOtherWorkspace) && !agent.inWorkspace;
+
+          return (
+            <div key={agent.id} className={panelTabClass(isActive, "chat", "lg")}>
+              <button
+                type="button"
+                onClick={() => onSelectAgent?.(agent.id)}
+                className={`${panelTabLabelClass(isActive, "lg")} flex items-center gap-2`}
+              >
+                <span className={`size-1.5 shrink-0 rounded-full ${statusDot(agent.status)}`} aria-hidden />
+                {agent.name}
+              </button>
+              <button
+                type="button"
+                aria-label={`Rename ${agent.name}`}
+                onClick={() => onRenameAgent?.(agent.id)}
+                className="flex w-8 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
+              >
+                <Pencil className="size-3" />
+              </button>
+              {onLinkAgentToWorkspace && activeWorkspaceId && (
+                <button
+                  type="button"
+                  disabled={linkDisabled}
+                  title={
+                    agent.inWorkspace
+                      ? `Remove from ${activeWorkspaceName ?? "workspace"}`
+                      : linkDisabled
+                        ? `Already in ${agent.linkedWorkspaceName ?? "another workspace"}`
+                        : `Add to ${activeWorkspaceName ?? "workspace"}`
+                  }
+                  onClick={() => onLinkAgentToWorkspace(agent.id)}
+                  className={`flex w-8 shrink-0 items-center justify-center border-l border-border disabled:cursor-not-allowed disabled:opacity-35 ${
+                    agent.inWorkspace ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Link2 className="size-3" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {onAddAgent && (
+          <button type="button" onClick={onAddAgent} aria-label="New agent" className={panelAddTabClass("chat")}>
+            <Plus className="size-4" strokeWidth={2.5} />
+          </button>
+        )}
       </div>
 
-      {/* Messages */}
+      {(workspaceTabs.length > 0 || onAddWorkspace) && (
+        <div className={`${panelTabRowClass()} mt-0`}>
+          {workspaceTabs.map((ws) => {
+            const isActive = viewMode === "workspace" && activeWorkspaceId === ws.id;
+            return (
+              <div key={ws.id} className={panelTabClass(isActive, "chat", "md")}>
+                <button
+                  type="button"
+                  onClick={() => onSelectWorkspace?.(ws.id)}
+                  className={`${panelTabLabelClass(isActive, "md")} font-mono`}
+                >
+                  {ws.name}
+                  <span className="ml-1 opacity-70">({ws.sessionCount})</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Rename ${ws.name}`}
+                  onClick={() => onRenameWorkspace?.(ws.id)}
+                  className="flex w-7 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="size-2.5" />
+                </button>
+              </div>
+            );
+          })}
+          {onAddWorkspace && (
+            <button
+              type="button"
+              onClick={onAddWorkspace}
+              aria-label="New workspace"
+              className={panelAddTabClass("chat")}
+            >
+              <Plus className="size-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col border border-border bg-[oklch(0.11_0.007_285)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className={`size-1.5 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
+            <span className="text-sm font-medium tracking-tight">{headerTitle}</span>
+          </div>
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            {waiting ? "Paused" : isRunning ? "Active" : "Ready"}
+          </span>
+        </div>
+
+        {linkError && (
+          <p className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            {linkError}
+          </p>
+        )}
+
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="px-4 py-4">
           {!hasMessages && !thinking && (
@@ -113,7 +283,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
           )}
 
           <div className="space-y-5">
-            {session?.messages.map((message) => {
+            {messages.map((message) => {
               const isUser = message.role === "user";
 
               return (
@@ -131,7 +301,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
                   ) : (
                     <div className="max-w-[95%]">
                       <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                        Agent
+                        {title}
                       </p>
                       <p className="text-[13px] leading-[1.65] text-foreground/90">{message.content}</p>
                     </div>
@@ -211,7 +381,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onFocus={onFocusInput}
-            placeholder={waiting ? "Resume to continue…" : "Ask the agent to browse, search, or act…"}
+            placeholder={composerPlaceholder}
             rows={1}
             disabled={disabled}
             className="max-h-[120px] min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
@@ -235,6 +405,7 @@ export function ChatPanel({ session, onSend, onResume, onFocusInput }: ChatPanel
           Enter to send · Shift+Enter for new line
         </p>
       </form>
+      </div>
     </div>
   );
 }

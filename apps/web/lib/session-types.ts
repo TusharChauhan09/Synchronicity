@@ -9,9 +9,18 @@ export type ChatMessage = {
 
 export type SessionSnapshot = {
   id: string;
+  name: string;
   status: SessionStatus;
   waitReason?: string;
   url?: string;
   screenshot?: string;
   messages: ChatMessage[];
+};
+
+export type WorkspaceSnapshot = {
+  id: string;
+  name: string;
+  sessionIds: string[];
+  messages: ChatMessage[];
+  status: 'idle' | 'running';
 };
