@@ -1,21 +1,24 @@
-export const WORKSPACE_AGENT_COLORS = [
-  '#f87171',
+export const WORKSPACE_THEME_COLORS = [
+  '#9ca3af',
   '#60a5fa',
-  '#34d399',
+  '#f87171',
   '#fbbf24',
+  '#4ade80',
+  '#f472b6',
   '#c084fc',
+  '#22d3ee',
   '#fb923c',
 ] as const;
 
 export function pickWorkspaceColor(usedColors: Set<string>): string {
-  for (const color of WORKSPACE_AGENT_COLORS) {
+  for (const color of WORKSPACE_THEME_COLORS) {
     if (!usedColors.has(color)) return color;
   }
-  return WORKSPACE_AGENT_COLORS[usedColors.size % WORKSPACE_AGENT_COLORS.length] ?? '#f87171';
+  return WORKSPACE_THEME_COLORS[usedColors.size % WORKSPACE_THEME_COLORS.length] ?? '#60a5fa';
 }
 
 export function normalizeWorkspaceColor(color: string): string | null {
-  const trimmed = color.trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toLowerCase();
+  const trimmed = color.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(trimmed)) return trimmed;
   return null;
 }

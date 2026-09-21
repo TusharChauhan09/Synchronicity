@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Hand, Loader2, Pencil, Plus, Sparkles } from "lucide-react";
+import { ArrowUp, Hand, Loader2, Plus, Sparkles } from "lucide-react";
 import { AGENT_DRAG_MIME } from "@/lib/workspace-colors";
 import { motion, AnimatePresence } from "motion/react";
 import type { ChatMessage, SessionSnapshot } from "@/lib/session-types";
+import { PanelTabAccent } from "./panel-tab-accent";
 import {
   panelAddTabClass,
   panelTabClass,
   panelTabLabelClass,
   panelTabRowClass,
 } from "./panel-tab-styles";
+import { TabEditPopover } from "./tab-edit-popover";
+import { ChatMessageBubble } from "./chat-message";
 
 const STATUS_LINES = ["Thinking", "Figuring", "Browsing", "Working"] as const;
 
@@ -19,15 +22,13 @@ export type ChatAgentTab = {
   name: string;
   status: SessionSnapshot["status"];
   workspaceColor?: string | null;
-  lockedInOtherWorkspace?: boolean;
-  linkedWorkspaceName?: string;
 };
 
 export type ChatWorkspaceTab = {
   id: string;
   name: string;
+  color: string;
   sessionCount: number;
-  memberColors: string[];
 };
 
 type ChatPanelProps = {
@@ -40,15 +41,14 @@ type ChatPanelProps = {
   activeAgentId?: string | null;
   workspaceTabs?: ChatWorkspaceTab[];
   activeWorkspaceId?: string | null;
-  activeWorkspaceName?: string | null;
   onSelectAgent?: (id: string) => void;
   onAddAgent?: () => void;
-  onRenameAgent?: (id: string) => void;
+  onSaveAgentName?: (id: string, name: string) => Promise<void>;
   onDropAgentOnWorkspace?: (workspaceId: string, agentId: string) => void;
-  onPickAgentWorkspaceColor?: (agentId: string) => void;
   onSelectWorkspace?: (id: string) => void;
-  onAddWorkspace?: () => void;
-  onRenameWorkspace?: (id: string) => void;
+  onSaveWorkspace?: (id: string, patch: { name?: string; color?: string }) => Promise<void>;
+  onCreateWorkspaceFromAgent?: (agentId: string, workspaceName?: string) => Promise<void>;
+  messageAccentColor?: string | null;
   linkError?: string | null;
   chatReady?: boolean;
   onSend: (message: string) => Promise<void>;
@@ -72,15 +72,14 @@ export function ChatPanel({
   activeAgentId,
   workspaceTabs = [],
   activeWorkspaceId,
-  activeWorkspaceName,
   onSelectAgent,
   onAddAgent,
-  onRenameAgent,
+  onSaveAgentName,
   onDropAgentOnWorkspace,
-  onPickAgentWorkspaceColor,
   onSelectWorkspace,
-  onAddWorkspace,
-  onRenameWorkspace,
+  onSaveWorkspace,
+  onCreateWorkspaceFromAgent,
+  messageAccentColor,
   linkError,
   chatReady: chatReadyProp,
   onSend,
@@ -92,6 +91,11 @@ export function ChatPanel({
   const [sendError, setSendError] = useState<string | null>(null);
   const [statusIndex, setStatusIndex] = useState(0);
   const [dropTargetWorkspaceId, setDropTargetWorkspaceId] = useState<string | null>(null);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [draftColor, setDraftColor] = useState("#60a5fa");
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -135,6 +139,69 @@ export function ChatPanel({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [input]);
 
+  function openAgentEdit(agentId: string, rect: DOMRect, name: string) {
+    setEditingWorkspaceId(null);
+    setEditingAgentId(agentId);
+    setDraftName(name);
+    setAnchorRect(rect);
+  }
+
+  function openWorkspaceEdit(workspaceId: string, rect: DOMRect, name: string, color: string) {
+    setEditingAgentId(null);
+    setEditingWorkspaceId(workspaceId);
+    setDraftName(name);
+    setDraftColor(color);
+    setAnchorRect(rect);
+  }
+
+  function closeEditor() {
+    setEditingAgentId(null);
+    setEditingWorkspaceId(null);
+    setAnchorRect(null);
+  }
+
+  async function saveEditor() {
+    const name = draftName.trim();
+    if (!name) return;
+
+    try {
+      if (editingAgentId && onSaveAgentName) {
+        await onSaveAgentName(editingAgentId, name);
+      }
+      if (editingWorkspaceId && onSaveWorkspace) {
+        await onSaveWorkspace(editingWorkspaceId, { name, color: draftColor });
+      }
+      closeEditor();
+    } catch {
+      // keep editor open on failure
+    }
+  }
+
+  async function handleCreateWorkspaceFromEditor() {
+    if (!editingAgentId || !onCreateWorkspaceFromAgent) return;
+    const name = draftName.trim();
+    try {
+      if (name && onSaveAgentName) {
+        await onSaveAgentName(editingAgentId, name);
+      }
+      await onCreateWorkspaceFromAgent(editingAgentId, name || undefined);
+      closeEditor();
+    } catch {
+      // keep editor open
+    }
+  }
+
+  async function handleWorkspaceColorSelect(color: string) {
+    if (!editingWorkspaceId || !onSaveWorkspace) return;
+    setDraftColor(color);
+    try {
+      await onSaveWorkspace(editingWorkspaceId, { color });
+    } catch {
+      const ws = workspaceTabs.find((w) => w.id === editingWorkspaceId);
+      if (ws) setDraftColor(ws.color);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const message = input.trim();
@@ -168,8 +235,30 @@ export function ChatPanel({
         ? "Resume to continue…"
         : "Ask the agent to browse, search, or act…";
 
+  const editingAgent = editingAgentId
+    ? agentTabs.find((agent) => agent.id === editingAgentId)
+    : undefined;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <TabEditPopover
+        open={Boolean(editingAgentId || editingWorkspaceId)}
+        anchorRect={anchorRect}
+        name={draftName}
+        onNameChange={setDraftName}
+        onSave={() => void saveEditor()}
+        onClose={closeEditor}
+        showColors={Boolean(editingWorkspaceId)}
+        color={draftColor}
+        onColorChange={setDraftColor}
+        onColorSelect={(color) => void handleWorkspaceColorSelect(color)}
+        showCreateWorkspace={Boolean(
+          editingAgentId && !editingAgent?.workspaceColor && onCreateWorkspaceFromAgent,
+        )}
+        onCreateWorkspace={() => void handleCreateWorkspaceFromEditor()}
+        createWorkspaceLabel="Create workspace with this agent"
+      />
+
       <div className={panelTabRowClass()}>
         {agentTabs.map((agent) => {
           const isActive = activeAgentId === agent.id;
@@ -183,43 +272,21 @@ export function ChatPanel({
                 event.dataTransfer.effectAllowed = "copyMove";
               }}
               className={panelTabClass(isActive, "chat", "sm")}
-              style={
-                agent.workspaceColor
-                  ? { borderTopWidth: 2, borderTopColor: agent.workspaceColor }
-                  : undefined
-              }
             >
-              {agent.workspaceColor ? (
-                <button
-                  type="button"
-                  title="Change workspace color"
-                  onClick={() => onPickAgentWorkspaceColor?.(agent.id)}
-                  className="flex w-6 shrink-0 items-center justify-center border-r border-border"
-                  aria-label={`Color for ${agent.name}`}
-                >
-                  <span
-                    className="size-2 rounded-full border border-white/20"
-                    style={{ backgroundColor: agent.workspaceColor }}
-                  />
-                </button>
-              ) : null}
+              <PanelTabAccent color={agent.workspaceColor} />
               <button
                 type="button"
                 onClick={() => onSelectAgent?.(agent.id)}
+                onDoubleClick={(event) => {
+                  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                  openAgentEdit(agent.id, rect, agent.name);
+                }}
                 className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5`}
               >
                 {!agent.workspaceColor && (
                   <span className={`size-1.5 shrink-0 rounded-full ${statusDot(agent.status)}`} aria-hidden />
                 )}
                 {agent.name}
-              </button>
-              <button
-                type="button"
-                aria-label={`Rename ${agent.name}`}
-                onClick={() => onRenameAgent?.(agent.id)}
-                className="flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
-              >
-                <Pencil className="size-2.5" />
               </button>
             </div>
           );
@@ -231,7 +298,7 @@ export function ChatPanel({
         )}
       </div>
 
-      {(workspaceTabs.length > 0 || onAddWorkspace) && (
+      {workspaceTabs.length > 0 && (
         <div className={`${panelTabRowClass()} mt-0`}>
           {workspaceTabs.map((ws) => {
             const isActive = viewMode === "workspace" && activeWorkspaceId === ws.id;
@@ -254,53 +321,38 @@ export function ChatPanel({
                   if (agentId) onDropAgentOnWorkspace?.(ws.id, agentId);
                 }}
               >
+                <PanelTabAccent color={ws.color} />
                 <button
                   type="button"
                   onClick={() => onSelectWorkspace?.(ws.id)}
+                  onDoubleClick={(event) => {
+                    const rect = (event.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                    openWorkspaceEdit(ws.id, rect, ws.name, ws.color);
+                  }}
                   className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5 font-mono`}
                 >
-                  {ws.memberColors.map((color, index) => (
-                    <span
-                      key={`${ws.id}-${index}`}
-                      className="size-1.5 shrink-0 rounded-full border border-white/10"
-                      style={{ backgroundColor: color }}
-                      aria-hidden
-                    />
-                  ))}
+                  <span
+                    className="size-2 shrink-0 rounded-full border border-white/15"
+                    style={{ backgroundColor: ws.color }}
+                    aria-hidden
+                  />
                   {ws.name}
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Rename ${ws.name}`}
-                  onClick={() => onRenameWorkspace?.(ws.id)}
-                  className="flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
-                >
-                  <Pencil className="size-2.5" />
+                  <span className="opacity-60">({ws.sessionCount})</span>
                 </button>
               </div>
             );
           })}
-          {onAddWorkspace && (
-            <button
-              type="button"
-              onClick={onAddWorkspace}
-              aria-label="New workspace"
-              className={panelAddTabClass("chat")}
-            >
-              <Plus className="size-3.5" />
-            </button>
-          )}
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col border border-border bg-[oklch(0.11_0.007_285)]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className={`size-1.5 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
-            <span className="text-sm font-medium tracking-tight">{headerTitle}</span>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-[oklch(0.1_0.007_285)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className={`size-2 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
+            <span className="truncate text-sm font-semibold tracking-tight">{headerTitle}</span>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-            {waiting ? "Paused" : isRunning ? "Active" : "Ready"}
+          <span className="shrink-0 rounded-full bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+            {waiting ? "Paused" : isRunning ? "Working" : "Ready"}
           </span>
         </div>
 
@@ -309,149 +361,121 @@ export function ChatPanel({
             {linkError}
           </p>
         )}
-        <p className="shrink-0 border-b border-border/60 px-4 py-1.5 font-mono text-[9px] text-muted-foreground">
-          Drag an agent tab onto a workspace to link · drop again on the same workspace to unlink
-        </p>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="px-4 py-4">
-          {!hasMessages && !thinking && (
-            <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3 text-center">
-              <div className="flex size-9 items-center justify-center border border-border bg-card">
-                <Sparkles className="size-4 text-muted-foreground" strokeWidth={1.5} />
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
+          <div className="px-3 py-4 sm:px-4">
+            {!hasMessages && !thinking && (
+              <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 px-4 text-center">
+                <div className="flex size-11 items-center justify-center rounded-2xl border border-border/70 bg-card/60 shadow-inner">
+                  <Sparkles className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[15px] font-medium text-foreground">Start a task</p>
+                  <p className="max-w-[260px] text-[13px] leading-relaxed text-muted-foreground">
+                    Describe what to do in the browser. Double-click an agent tab to rename or create a
+                    workspace.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm text-foreground/90">What should I do?</p>
-                <p className="max-w-[220px] text-xs leading-relaxed text-muted-foreground">
-                  Search the web, fill forms, or navigate sites — I&apos;ll control the browser for you.
-                </p>
-              </div>
-            </div>
-          )}
+            )}
 
-          <div className="space-y-5">
-            {messages.map((message) => {
-              const isUser = message.role === "user";
-
-              return (
-                <motion.div
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <ChatMessageBubble
                   key={message.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className={isUser ? "flex justify-end" : ""}
-                >
-                  {isUser ? (
-                    <div className="max-w-[88%] border border-border bg-card px-3 py-2.5">
-                      <p className="text-[13px] leading-[1.6] text-foreground">{message.content}</p>
-                    </div>
-                  ) : (
-                    <div className="max-w-[95%]">
-                      <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                        {title}
-                      </p>
-                      <p className="text-[13px] leading-[1.65] text-foreground/90">{message.content}</p>
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
+                  message={message}
+                  agentLabel={headerTitle}
+                  accentColor={messageAccentColor}
+                />
+              ))}
 
-            <AnimatePresence>
-              {thinking && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center gap-3"
-                >
-                  <Loader2
-                    className="size-4 shrink-0 animate-spin text-muted-foreground"
-                    aria-label={statusLabel}
-                  />
-                  <motion.span
-                    key={statusLabel}
-                    initial={{ opacity: 0, y: 2 }}
+              <AnimatePresence>
+                {thinking && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-[13px] text-muted-foreground"
+                    exit={{ opacity: 0 }}
+                    className="flex items-center gap-2.5 rounded-2xl border border-border/60 bg-card/50 px-3.5 py-2.5"
                   >
-                    {statusLabel}…
-                  </motion.span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    <Loader2
+                      className="size-4 shrink-0 animate-spin text-muted-foreground"
+                      aria-label={statusLabel}
+                    />
+                    <motion.span
+                      key={statusLabel}
+                      initial={{ opacity: 0, y: 2 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-[13px] text-muted-foreground"
+                    >
+                      {statusLabel}…
+                    </motion.span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div ref={bottomRef} className="h-2" />
           </div>
 
-          <div ref={bottomRef} className="h-1" />
-        </div>
-
-        {/* Bottom fade */}
-        <div
-          className="pointer-events-none sticky bottom-0 h-6 bg-gradient-to-t from-[oklch(0.11_0.007_285)] to-transparent"
-          aria-hidden
-        />
-      </div>
-
-      {/* Paused banner */}
-      {waiting && (
-        <div className="shrink-0 border-t border-amber-500/25 bg-amber-500/8 px-4 py-3">
-          <p className="text-xs leading-relaxed text-amber-100/80">
-            {session?.waitReason ?? "Paused — interact with the browser, then resume."}
-          </p>
-          <button
-            type="button"
-            onClick={() => void onResume()}
-            className="mt-2.5 inline-flex items-center gap-1.5 border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-amber-100 transition-colors hover:bg-amber-500/20"
-          >
-            <Hand className="size-3" />
-            Resume agent
-          </button>
-        </div>
-      )}
-
-      {/* Composer */}
-      <form
-        onSubmit={(event) => void handleSubmit(event)}
-        className="shrink-0 border-t border-border p-3"
-      >
-        {sendError && (
-          <p className="mb-2 px-1 text-xs text-destructive">{sendError}</p>
-        )}
-        <div
-          className={`flex items-end gap-2 border border-border bg-card p-2 transition-colors ${
-            disabled ? "opacity-60" : "focus-within:border-foreground/25"
-          }`}
-        >
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onFocus={onFocusInput}
-            placeholder={composerPlaceholder}
-            rows={1}
-            disabled={disabled}
-            className="max-h-[120px] min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void handleSubmit(event);
-              }
-            }}
+          <div
+            className="pointer-events-none sticky bottom-0 h-8 bg-gradient-to-t from-[oklch(0.1_0.007_285)] to-transparent"
+            aria-hidden
           />
-          <button
-            type="submit"
-            disabled={disabled || !input.trim()}
-            className="flex size-8 shrink-0 items-center justify-center bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-25"
-            aria-label="Send message"
-          >
-            <ArrowUp className="size-3.5" strokeWidth={2.5} />
-          </button>
         </div>
-        <p className="mt-2 px-1 font-mono text-[10px] text-muted-foreground/50">
-          Enter to send · Shift+Enter for new line
-        </p>
-      </form>
+
+        {waiting && (
+          <div className="shrink-0 border-t border-amber-500/25 bg-amber-500/10 px-4 py-3">
+            <p className="text-xs leading-relaxed text-amber-100/85">
+              {session?.waitReason ?? "Paused — interact with the browser, then resume."}
+            </p>
+            <button
+              type="button"
+              onClick={() => void onResume()}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-amber-500/35 bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-50 transition-colors hover:bg-amber-500/25"
+            >
+              <Hand className="size-3.5" />
+              Resume agent
+            </button>
+          </div>
+        )}
+
+        <form
+          onSubmit={(event) => void handleSubmit(event)}
+          className="shrink-0 border-t border-border/50 bg-[oklch(0.09_0.006_285)] p-3"
+        >
+          {sendError && <p className="mb-2 px-1 text-xs text-destructive">{sendError}</p>}
+          <div
+            className={`flex items-end gap-2 rounded-xl border border-border/70 bg-card/80 p-2 shadow-sm transition-[border-color,box-shadow] ${
+              disabled ? "opacity-60" : "focus-within:border-foreground/20 focus-within:shadow-[0_0_0_3px_oklch(0.98_0_0/6%)]"
+            }`}
+          >
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onFocus={onFocusInput}
+              placeholder={composerPlaceholder}
+              rows={1}
+              disabled={disabled}
+              className="max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/55 disabled:cursor-not-allowed"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSubmit(event);
+                }
+              }}
+            />
+            <button
+              type="submit"
+              disabled={disabled || !input.trim()}
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-25"
+              aria-label="Send message"
+            >
+              <ArrowUp className="size-4" strokeWidth={2.5} />
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

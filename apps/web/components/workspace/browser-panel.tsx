@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Loader2, MousePointer2, X } from "lucide-react";
 import { mapClickToViewport } from "@/lib/map-click";
 import type { SessionSnapshot } from "@/lib/session-types";
+import { PanelTabAccent } from "./panel-tab-accent";
 import { panelTabClass, panelTabLabelClass, panelTabRowClass } from "./panel-tab-styles";
 
 const SPECIAL_KEYS = new Set([
@@ -129,8 +130,8 @@ export function BrowserPanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Tab row + controls — sits flush on top of the outer box */}
-      <div className="flex shrink-0 items-end justify-between gap-3">
-        <div className={panelTabRowClass()}>
+      <div className="flex shrink-0 items-end justify-between gap-3 overflow-hidden">
+        <div className={`${panelTabRowClass()} min-w-0 flex-1`}>
           {resolvedTabs.map((tab) => {
             const isActive = tab.id === activeId;
 
@@ -138,12 +139,8 @@ export function BrowserPanel({
               <div
                 key={tab.id}
                 className={panelTabClass(isActive, "browser", "md")}
-                style={
-                  tab.accentColor
-                    ? { borderTopWidth: 2, borderTopColor: tab.accentColor }
-                    : undefined
-                }
               >
+                <PanelTabAccent color={tab.accentColor} />
                 <button
                   type="button"
                   onClick={() => onTabSelect?.(tab.id)}
@@ -189,7 +186,7 @@ export function BrowserPanel({
       </div>
 
       {/* Outer browser box — flush below tabs, no inner padding */}
-      <div className="relative mt-0 flex min-h-0 flex-1 flex-col overflow-hidden border border-border bg-[oklch(0.09_0.006_285)]">
+      <div className="relative mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-[oklch(0.09_0.006_285)] shadow-inner">
         {screenshot ? (
           <div
             ref={surfaceRef}

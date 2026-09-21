@@ -23,7 +23,17 @@ function formatTabUrl(url?: string) {
 }
 
 function normalizeWorkspace(ws: WorkspaceSnapshot): WorkspaceSnapshot {
-  return { ...ws, sessionColors: ws.sessionColors ?? {} };
+  return { ...ws, color: ws.color ?? "#60a5fa" };
+}
+
+function workspaceColorForAgent(
+  agentId: string,
+  agentWorkspaceMap: Record<string, string>,
+  workspaces: Record<string, WorkspaceSnapshot>,
+): string | undefined {
+  const workspaceId = agentWorkspaceMap[agentId];
+  if (!workspaceId) return undefined;
+  return workspaces[workspaceId]?.color;
 }
 
 export function WorkspaceShell() {
@@ -37,13 +47,6 @@ export function WorkspaceShell() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manualControl, setManualControl] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<
-    | { kind: "agent"; id: string }
-    | { kind: "workspace"; id: string }
-    | { kind: "agent-color"; workspaceId: string; sessionId: string }
-    | null
-  >(null);
-  const [renameValue, setRenameValue] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const bootIdRef = useRef(0);
 
@@ -104,7 +107,7 @@ export function WorkspaceShell() {
   const refreshWorkspace = useCallback(async (workspaceId: string) => {
     try {
       const data = await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}`);
-      setWorkspaces((prev) => ({ ...prev, [workspaceId]: data }));
+      setWorkspaces((prev) => ({ ...prev, [workspaceId]: normalizeWorkspace(data) }));
     } catch {
       // polling
     }
@@ -140,22 +143,14 @@ export function WorkspaceShell() {
           sessionList = [created];
         }
 
-        let workspaceListBoot = workspaceRows;
-        if (workspaceListBoot.length === 0) {
-          const created = await api<WorkspaceSnapshot>("/api/workspaces", {
-            method: "POST",
-            body: JSON.stringify({}),
-          });
-          workspaceListBoot = [created];
-        }
-
         setSessions(Object.fromEntries(sessionList.map((s) => [s.id, s])));
         setSessionOrder(sessionList.map((s) => s.id));
         setActiveAgentId(sessionList[0]?.id ?? null);
         setWorkspaces(
-          Object.fromEntries(workspaceListBoot.map((ws) => [ws.id, normalizeWorkspace(ws)])),
+          Object.fromEntries(workspaceRows.map((ws) => [ws.id, normalizeWorkspace(ws)])),
         );
-        setActiveWorkspaceId(workspaceListBoot[0]?.id ?? null);
+        setActiveWorkspaceId(null);
+        setViewMode("agent");
       } catch (err) {
         if (bootId !== bootIdRef.current) return;
         if (err instanceof ApiError && err.status === 401) {
@@ -210,13 +205,25 @@ export function WorkspaceShell() {
     selectAgent(data.id);
   }
 
-  async function handleAddWorkspace() {
-    const data = await api<WorkspaceSnapshot>("/api/workspaces", {
+  async function handleCreateWorkspaceForAgent(agentId: string, workspaceName?: string) {
+    const agent = sessions[agentId];
+    const name =
+      workspaceName?.trim() ||
+      `${agent?.name?.trim() || "Agent"} workspace`.slice(0, 64);
+
+    const created = await api<WorkspaceSnapshot>("/api/workspaces", {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({ name }),
     });
-    setWorkspaces((prev) => ({ ...prev, [data.id]: data }));
-    selectWorkspace(data.id);
+
+    const linked = await api<WorkspaceSnapshot>(`/api/workspaces/${created.id}/sessions`, {
+      method: "POST",
+      body: JSON.stringify({ sessionId: agentId }),
+    });
+
+    setWorkspaces((prev) => ({ ...prev, [linked.id]: normalizeWorkspace(linked) }));
+    setLinkError(null);
+    selectWorkspace(linked.id);
   }
 
   async function handleCloseAgent(sessionId: string) {
@@ -293,7 +300,7 @@ export function WorkspaceShell() {
     const tick = async () => {
       try {
         const latest = await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}`);
-        setWorkspaces((prev) => ({ ...prev, [latest.id]: latest }));
+        setWorkspaces((prev) => ({ ...prev, [latest.id]: normalizeWorkspace(latest) }));
         if (latest.status === "running") {
           window.setTimeout(() => void tick(), 700);
           return;
@@ -308,33 +315,38 @@ export function WorkspaceShell() {
     void tick();
   }
 
-  async function handleRenameSubmit() {
-    if (!renameTarget) return;
-    const name = renameValue.trim();
-    if (renameTarget.kind !== "agent-color" && !name) return;
+  async function handleSaveAgentName(id: string, name: string) {
+    const updated = await api<SessionSnapshot>(`/api/session/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    });
+    setSessions((prev) => ({ ...prev, [updated.id]: updated }));
+  }
 
-    if (renameTarget.kind === "agent") {
-      const updated = await api<SessionSnapshot>(`/api/session/${renameTarget.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
-      });
-      setSessions((prev) => ({ ...prev, [updated.id]: updated }));
-    } else if (renameTarget.kind === "workspace") {
-      const updated = await api<WorkspaceSnapshot>(`/api/workspaces/${renameTarget.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
-      });
-      setWorkspaces((prev) => ({ ...prev, [updated.id]: updated }));
-    } else {
-      const updated = await api<WorkspaceSnapshot>(
-        `/api/workspaces/${renameTarget.workspaceId}/sessions/${renameTarget.sessionId}`,
-        { method: "PATCH", body: JSON.stringify({ color: name }) },
-      );
-      setWorkspaces((prev) => ({ ...prev, [updated.id]: updated }));
-    }
+  async function handleSaveWorkspace(id: string, patch: { name?: string; color?: string }) {
+    setWorkspaces((prev) => {
+      const current = prev[id];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [id]: normalizeWorkspace({
+          ...current,
+          name: patch.name?.trim() ? patch.name.trim() : current.name,
+          color: patch.color ?? current.color,
+        }),
+      };
+    });
 
-    setRenameTarget(null);
-    setRenameValue("");
+    const body: { name?: string; color?: string } = {};
+    const trimmedName = patch.name?.trim();
+    if (trimmedName) body.name = trimmedName;
+    if (patch.color) body.color = patch.color;
+
+    const updated = await api<WorkspaceSnapshot>(`/api/workspaces/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    setWorkspaces((prev) => ({ ...prev, [updated.id]: normalizeWorkspace(updated) }));
   }
 
   async function handleControl(action: {
@@ -360,14 +372,14 @@ export function WorkspaceShell() {
     if (viewMode === "workspace" && activeWorkspaceId) {
       const ws = workspaces[activeWorkspaceId];
       if (!ws?.sessionIds.length) {
-        throw new Error("Drag at least one agent onto this workspace tab first.");
+        throw new Error("This workspace has no agents. Open an agent tab and create a workspace from there.");
       }
 
       const body = await api<WorkspaceSnapshot>(`/api/workspaces/${activeWorkspaceId}/chat`, {
         method: "POST",
         body: JSON.stringify({ message }),
       });
-      setWorkspaces((prev) => ({ ...prev, [body.id]: body }));
+      setWorkspaces((prev) => ({ ...prev, [body.id]: normalizeWorkspace(body) }));
       pollWorkspaceUntilIdle(activeWorkspaceId);
       return;
     }
@@ -390,20 +402,31 @@ export function WorkspaceShell() {
     setSessions((prev) => ({ ...prev, [activeAgentId]: data }));
   }
 
+  const agentWorkspaceMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const ws of workspaceList) {
+      for (const sessionId of ws.sessionIds) {
+        map[sessionId] = ws.id;
+      }
+    }
+    return map;
+  }, [workspaceList]);
+
   const browserTabs = useMemo(() => {
     if (viewMode === "workspace" && activeWorkspace) {
       return activeWorkspace.sessionIds.map((id) => ({
         id,
         url: formatTabUrl(sessions[id]?.url),
-        accentColor: activeWorkspace.sessionColors?.[id],
+        accentColor: activeWorkspace.color,
       }));
     }
 
     return agentList.map((agent) => ({
       id: agent.id,
       url: formatTabUrl(agent.url),
+      accentColor: workspaceColorForAgent(agent.id, agentWorkspaceMap, workspaces),
     }));
-  }, [viewMode, activeWorkspace, agentList, sessions]);
+  }, [viewMode, activeWorkspace, agentList, sessions, agentWorkspaceMap, workspaces]);
 
   const browserSessionForPanel = useMemo(() => {
     if (viewMode === "workspace" && activeWorkspace && activeWorkspace.sessionIds.length === 0) {
@@ -421,51 +444,38 @@ export function WorkspaceShell() {
     return activeSession;
   }, [viewMode, activeWorkspace, activeAgentId, activeSession, sessions]);
 
-  const agentWorkspaceMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const ws of workspaceList) {
-      for (const sessionId of ws.sessionIds) {
-        map[sessionId] = ws.id;
-      }
-    }
-    return map;
-  }, [workspaceList]);
-
-  const chatAgentTabs = agentList.map((agent) => {
-    const linkedWorkspaceId = agentWorkspaceMap[agent.id];
-    const linkedWorkspace = linkedWorkspaceId ? workspaces[linkedWorkspaceId] : undefined;
-
-    return {
-      id: agent.id,
-      name: agent.name,
-      status: agent.status,
-      workspaceColor: linkedWorkspace?.sessionColors?.[agent.id] ?? null,
-      lockedInOtherWorkspace:
-        Boolean(linkedWorkspaceId) && linkedWorkspaceId !== activeWorkspaceId,
-      linkedWorkspaceName: linkedWorkspace?.name,
-    };
-  });
+  const chatAgentTabs = agentList.map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    status: agent.status,
+    workspaceColor: workspaceColorForAgent(agent.id, agentWorkspaceMap, workspaces) ?? null,
+  }));
 
   const chatWorkspaceTabs = workspaceList.map((ws) => ({
     id: ws.id,
     name: ws.name,
+    color: ws.color,
     sessionCount: ws.sessionIds.length,
-    memberColors: ws.sessionIds
-      .map((id) => ws.sessionColors?.[id])
-      .filter((color): color is string => Boolean(color)),
   }));
 
+  const chatAccentColor =
+    viewMode === "workspace" && activeWorkspace
+      ? activeWorkspace.color
+      : activeAgentId
+        ? workspaceColorForAgent(activeAgentId, agentWorkspaceMap, workspaces)
+        : undefined;
+
   return (
-    <div className="flex h-screen flex-col bg-background dot-grid">
-      <header className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
+    <div className="flex h-screen flex-col bg-[oklch(0.055_0.007_285)]">
+      <header className="flex shrink-0 items-center justify-between border-b border-border/50 bg-[oklch(0.07_0.007_285/92%)] px-5 py-3 backdrop-blur-md">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="size-2 rounded-full bg-foreground" />
-          <span className="text-sm font-medium tracking-tight">Synchronicity</span>
+          <div className="size-2 rounded-full bg-foreground shadow-[0_0_12px_oklch(0.98_0_0/35%)]" />
+          <span className="text-sm font-semibold tracking-tight">Synchronicity</span>
         </Link>
         <div className="flex items-center gap-3">
-          <p className="font-mono text-xs text-muted-foreground">
-            {controllable ? "you control" : activeSession?.status ?? "booting"}
-          </p>
+          <span className="rounded-full border border-border/60 bg-card/40 px-2.5 py-1 text-[11px] text-muted-foreground">
+            {controllable ? "Manual control" : activeSession?.status ?? "Starting"}
+          </span>
           <Button
             variant="ghost"
             size="sm"
@@ -478,47 +488,6 @@ export function WorkspaceShell() {
         </div>
       </header>
 
-      {renameTarget && (
-        <form
-          className="flex shrink-0 items-center gap-2 border-b border-border bg-card/50 px-5 py-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleRenameSubmit();
-          }}
-        >
-          <span className="text-xs text-muted-foreground">
-            {renameTarget.kind === "agent-color" ? "Agent color" : "Rename"}
-          </span>
-          {renameTarget.kind === "agent-color" ? (
-            <input
-              type="color"
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              className="h-8 w-12 cursor-pointer border border-border bg-background"
-            />
-          ) : (
-            <input
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              className="flex-1 max-w-sm border border-border bg-background px-2 py-1 text-sm outline-none"
-              autoFocus
-            />
-          )}
-          <Button type="submit" size="sm">Save</Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setRenameTarget(null);
-              setRenameValue("");
-            }}
-          >
-            Cancel
-          </Button>
-        </form>
-      )}
-
       {loading && !activeSession ? (
         <div className="flex min-h-0 flex-1 items-center justify-center border-t border-border">
           <SiteLoader label="Starting session" />
@@ -528,8 +497,8 @@ export function WorkspaceShell() {
           <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.42fr)]">
-          <div className="min-h-0 p-4">
+        <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.45fr)]">
+          <div className="min-h-0 overflow-hidden rounded-xl border border-border/50 bg-[oklch(0.075_0.006_285)] p-3 shadow-[0_8px_40px_oklch(0_0_0/35%)]">
             <BrowserPanel
               session={browserSessionForPanel}
               loading={loading}
@@ -543,7 +512,7 @@ export function WorkspaceShell() {
               onControl={handleControl}
             />
           </div>
-          <div className="min-h-0 p-4 pl-0">
+          <div className="min-h-0 overflow-hidden rounded-xl border border-border/50 bg-[oklch(0.075_0.006_285)] p-3 shadow-[0_8px_40px_oklch(0_0_0/35%)]">
             <ChatPanel
               session={viewMode === "agent" ? activeSession : null}
               viewMode={viewMode}
@@ -551,35 +520,20 @@ export function WorkspaceShell() {
               activeAgentId={activeAgentId}
               workspaceTabs={chatWorkspaceTabs}
               activeWorkspaceId={activeWorkspaceId}
-              activeWorkspaceName={activeWorkspace?.name ?? null}
               onSelectAgent={selectAgent}
               onAddAgent={() => void handleAddAgent()}
-              onRenameAgent={(id) => {
-                const agent = sessions[id];
-                if (!agent) return;
-                setRenameTarget({ kind: "agent", id });
-                setRenameValue(agent.name);
-              }}
+              onSaveAgentName={handleSaveAgentName}
               linkError={linkError}
               chatReady={
                 viewMode === "workspace" ? Boolean(activeWorkspace) : Boolean(activeSession)
               }
               onDropAgentOnWorkspace={(wsId, agentId) => void handleDropAgentOnWorkspace(wsId, agentId)}
-              onPickAgentWorkspaceColor={(agentId) => {
-                const wsId = agentWorkspaceMap[agentId];
-                if (!wsId) return;
-                const color = workspaces[wsId]?.sessionColors?.[agentId] ?? "#f87171";
-                setRenameTarget({ kind: "agent-color", workspaceId: wsId, sessionId: agentId });
-                setRenameValue(color);
-              }}
               onSelectWorkspace={selectWorkspace}
-              onAddWorkspace={() => void handleAddWorkspace()}
-              onRenameWorkspace={(id) => {
-                const ws = workspaces[id];
-                if (!ws) return;
-                setRenameTarget({ kind: "workspace", id });
-                setRenameValue(ws.name);
-              }}
+              onSaveWorkspace={handleSaveWorkspace}
+              onCreateWorkspaceFromAgent={(agentId, name) =>
+                handleCreateWorkspaceForAgent(agentId, name)
+              }
+              messageAccentColor={chatAccentColor ?? null}
               title={activeSession?.name ?? "Agent"}
               messages={
                 viewMode === "workspace" && activeWorkspace ? activeWorkspace.messages : undefined

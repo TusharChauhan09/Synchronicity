@@ -10,8 +10,8 @@ type Workspace = {
   id: string;
   userId: string;
   name: string;
+  color: string;
   sessionIds: string[];
-  sessionColors: Record<string, string>;
   messages: ChatMessage[];
   running: boolean;
 };
@@ -35,12 +35,20 @@ function countUserWorkspaces(userId: string): number {
   return count;
 }
 
+function usedColorsForUser(userId: string): Set<string> {
+  const used = new Set<string>();
+  for (const workspace of workspaces.values()) {
+    if (workspace.userId === userId) used.add(workspace.color);
+  }
+  return used;
+}
+
 function toSnapshot(workspace: Workspace): WorkspaceSnapshot {
   return {
     id: workspace.id,
     name: workspace.name,
+    color: workspace.color,
     sessionIds: [...workspace.sessionIds],
-    sessionColors: { ...workspace.sessionColors },
     messages: workspace.messages,
     status: workspace.running ? 'running' : 'idle',
   };
@@ -56,12 +64,12 @@ export function createWorkspace(userId: string, name?: string): WorkspaceSnapsho
     id,
     userId,
     name: name?.trim().slice(0, 64) || `workspace-${countUserWorkspaces(userId) + 1}`,
+    color: pickWorkspaceColor(usedColorsForUser(userId)),
     sessionIds: [],
-    sessionColors: {},
     messages: [
       createMessage(
         'assistant',
-        'Workspace ready. Link agent tabs here, then send one message to run it on every linked browser.',
+        'Workspace ready. Drag agents onto this workspace, then send one message to run every linked browser.',
       ),
     ],
     running: false,
@@ -85,15 +93,36 @@ export function getWorkspaceSnapshot(id: string): WorkspaceSnapshot | null {
   return toSnapshot(workspace);
 }
 
+export function updateWorkspace(
+  id: string,
+  userId: string,
+  patch: { name?: string; color?: string },
+): WorkspaceSnapshot | null {
+  const workspace = workspaces.get(id);
+  if (!workspace || workspace.userId !== userId) return null;
+
+  if (patch.name !== undefined) {
+    const trimmed = patch.name.trim();
+    if (!trimmed) return null;
+    workspace.name = trimmed.slice(0, 64);
+  }
+
+  if (patch.color !== undefined) {
+    const normalized = normalizeWorkspaceColor(patch.color);
+    if (!normalized) {
+      if (patch.name === undefined) return null;
+    } else {
+      workspace.color = normalized;
+    }
+  }
+
+  return toSnapshot(workspace);
+}
+
 export function renameWorkspace(id: string, name: string): WorkspaceSnapshot | null {
   const workspace = workspaces.get(id);
   if (!workspace) return null;
-
-  const trimmed = name.trim();
-  if (!trimmed) return null;
-
-  workspace.name = trimmed.slice(0, 64);
-  return toSnapshot(workspace);
+  return updateWorkspace(id, workspace.userId, { name });
 }
 
 export function findWorkspaceForSession(userId: string, sessionId: string): string | null {
@@ -126,36 +155,8 @@ export function addSessionToWorkspace(
     return { ok: false, reason: 'in_other_workspace', otherWorkspaceId: otherId };
   }
 
-  const used = new Set(
-    workspace.sessionIds
-      .map((id) => workspace.sessionColors[id])
-      .filter((color): color is string => Boolean(color)),
-  );
-  workspace.sessionColors[sessionId] = pickWorkspaceColor(used);
   workspace.sessionIds.push(sessionId);
   return { ok: true, workspace: toSnapshot(workspace) };
-}
-
-export function setWorkspaceSessionColor(
-  workspaceId: string,
-  sessionId: string,
-  userId: string,
-  color: string,
-): WorkspaceSnapshot | null {
-  const workspace = workspaces.get(workspaceId);
-  if (!workspace || workspace.userId !== userId) return null;
-  if (!workspace.sessionIds.includes(sessionId)) return null;
-
-  const normalized = normalizeWorkspaceColor(color);
-  if (!normalized) return null;
-
-  const usedByOther = workspace.sessionIds.some(
-    (id) => id !== sessionId && workspace.sessionColors[id] === normalized,
-  );
-  if (usedByOther) return null;
-
-  workspace.sessionColors[sessionId] = normalized;
-  return toSnapshot(workspace);
 }
 
 export function removeSessionFromWorkspace(
@@ -166,7 +167,6 @@ export function removeSessionFromWorkspace(
   if (!workspace) return null;
 
   workspace.sessionIds = workspace.sessionIds.filter((id) => id !== sessionId);
-  delete workspace.sessionColors[sessionId];
   return toSnapshot(workspace);
 }
 

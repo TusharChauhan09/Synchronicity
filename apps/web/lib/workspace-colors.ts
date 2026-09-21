@@ -1,9 +1,12 @@
-export const WORKSPACE_AGENT_COLORS = [
-  '#f87171',
+export const WORKSPACE_THEME_COLORS = [
+  '#9ca3af',
   '#60a5fa',
-  '#34d399',
+  '#f87171',
   '#fbbf24',
+  '#4ade80',
+  '#f472b6',
   '#c084fc',
+  '#22d3ee',
   '#fb923c',
 ] as const;
 

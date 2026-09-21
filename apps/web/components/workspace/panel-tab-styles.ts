@@ -13,7 +13,7 @@ export function panelTabClass(isActive: boolean, surface: TabSurface, size: "sm"
   const height = size === "md" ? (isActive ? "h-8" : "h-7") : isActive ? "h-7" : "h-6";
 
   return cn(
-    "flex shrink-0 items-stretch border border-border -ml-px first:ml-0 transition-colors",
+    "relative flex shrink-0 items-stretch rounded-t-md border border-border/70 -ml-px first:ml-0 transition-colors",
     height,
     isActive
       ? cn("relative z-10 -mb-px border-b-transparent text-foreground", SURFACE_BG[surface])
@@ -32,7 +32,12 @@ export function panelTabLabelClass(isActive: boolean, size: "sm" | "md" = "sm") 
 }
 
 export function panelTabRowClass() {
-  return "flex min-w-0 items-end overflow-x-auto";
+  return [
+    "flex min-w-0 items-end overflow-x-auto overflow-y-hidden",
+    "[scrollbar-width:none]",
+    "[-ms-overflow-style:none]",
+    "[&::-webkit-scrollbar]:hidden",
+  ].join(" ");
 }
 
 export function panelAddTabClass(surface: TabSurface) {

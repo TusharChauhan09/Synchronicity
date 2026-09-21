@@ -35,8 +35,8 @@ export {
   removeSessionFromWorkspace,
   renameWorkspace,
   runWorkspaceChat,
-  setWorkspaceSessionColor,
+  updateWorkspace,
   startWorkspaceChat,
   workspaceBelongsToUser,
 } from './workspace.js';
-export { WORKSPACE_AGENT_COLORS } from './workspace-colors.js';
+export { WORKSPACE_THEME_COLORS } from './workspace-colors.js';

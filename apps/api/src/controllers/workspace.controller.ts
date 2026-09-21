@@ -7,9 +7,8 @@ import {
   getWorkspaceSnapshot,
   listWorkspacesForUser,
   removeSessionFromWorkspace,
-  renameWorkspace,
   runWorkspaceChat,
-  setWorkspaceSessionColor,
+  updateWorkspace,
   startWorkspaceChat,
   workspaceBelongsToUser,
 } from '@repo/agent';
@@ -72,15 +71,21 @@ export function patchWorkspace(req: Request, res: Response) {
   const owned = requireOwnedWorkspace(req, res);
   if (!owned) return;
 
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-  if (!name) {
-    res.status(400).json({ error: 'Name is required' });
+  const nameRaw = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const colorRaw = typeof req.body?.color === 'string' ? req.body.color.trim() : '';
+
+  if (!nameRaw && !colorRaw) {
+    res.status(400).json({ error: 'Name or color is required' });
     return;
   }
 
-  const workspace = renameWorkspace(owned.id, name);
+  const patch: { name?: string; color?: string } = {};
+  if (nameRaw) patch.name = nameRaw;
+  if (colorRaw) patch.color = colorRaw;
+
+  const workspace = updateWorkspace(owned.id, owned.userId, patch);
   if (!workspace) {
-    res.status(404).json({ error: 'Workspace not found' });
+    res.status(400).json({ error: 'Workspace not found or invalid values' });
     return;
   }
 
@@ -124,28 +129,6 @@ export function linkSession(req: Request, res: Response) {
   }
 
   res.json(result.workspace);
-}
-
-export function patchWorkspaceSession(req: Request, res: Response) {
-  const owned = requireOwnedWorkspace(req, res);
-  if (!owned) return;
-
-  const sessionId = req.params.sessionId;
-  const color = typeof req.body?.color === 'string' ? req.body.color : '';
-  if (!sessionId || !color) {
-    res.status(400).json({ error: 'sessionId and color are required' });
-    return;
-  }
-
-  const workspace = setWorkspaceSessionColor(owned.id, sessionId, owned.userId, color);
-  if (!workspace) {
-    res.status(400).json({
-      error: 'Invalid color, agent not in workspace, or color already used by another agent',
-    });
-    return;
-  }
-
-  res.json(workspace);
 }
 
 export function unlinkSession(req: Request, res: Response) {

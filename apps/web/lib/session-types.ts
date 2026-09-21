@@ -20,8 +20,8 @@ export type SessionSnapshot = {
 export type WorkspaceSnapshot = {
   id: string;
   name: string;
+  color: string;
   sessionIds: string[];
-  sessionColors: Record<string, string>;
   messages: ChatMessage[];
   status: 'idle' | 'running';
 };
