@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { LayoutGrid } from "lucide-react";
 import { WORKSPACE_THEME_COLORS } from "@/lib/workspace-colors";
 
 type TabEditPopoverProps = {
@@ -15,9 +16,8 @@ type TabEditPopoverProps = {
   onColorChange?: (color: string) => void;
   onColorSelect?: (color: string) => void;
   showColors?: boolean;
-  showCreateWorkspace?: boolean;
-  onCreateWorkspace?: () => void;
-  createWorkspaceLabel?: string;
+  showMakeWorkspace?: boolean;
+  onMakeWorkspace?: () => void;
 };
 
 export function TabEditPopover({
@@ -31,9 +31,8 @@ export function TabEditPopover({
   onColorChange,
   onColorSelect,
   showColors = false,
-  showCreateWorkspace = false,
-  onCreateWorkspace,
-  createWorkspaceLabel = "Create workspace with this agent",
+  showMakeWorkspace = false,
+  onMakeWorkspace,
 }: TabEditPopoverProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -75,36 +74,27 @@ export function TabEditPopover({
 
   if (!open || !anchorRect || !mounted) return null;
 
-  const left = Math.max(8, anchorRect.left + anchorRect.width / 2 - 140);
+  const left = Math.max(8, Math.min(window.innerWidth - 296, anchorRect.left));
   const top = anchorRect.bottom + 8;
 
   const popover = (
     <div
       data-tab-edit-popover
-      className="fixed z-[200] w-[280px] rounded-lg border border-border/80 bg-[oklch(0.13_0.008_285)] p-3 shadow-[0_12px_40px_oklch(0_0_0/45%)]"
+      className="fixed z-[200] w-[280px] rounded-xl border border-white/10 bg-[oklch(0.14_0.01_285)] p-3 shadow-[0_18px_50px_oklch(0_0_0/50%)]"
       style={{ left, top }}
       onMouseDown={(event) => event.stopPropagation()}
     >
+      <label className="mb-1.5 block px-0.5 text-[11px] text-muted-foreground">Name</label>
       <input
         ref={inputRef}
         value={name}
         onChange={(event) => onNameChange(event.target.value)}
-        className="w-full rounded-md border border-[oklch(0.55_0.12_250)] bg-[oklch(0.1_0.007_285)] px-3 py-2 text-sm text-foreground outline-none ring-1 ring-[oklch(0.55_0.12_250/35%)]"
+        className="w-full rounded-lg border border-white/10 bg-[oklch(0.1_0.007_285)] px-3 py-2 text-sm text-foreground outline-none focus:border-white/25"
         aria-label="Tab name"
       />
 
-      {showCreateWorkspace && onCreateWorkspace && (
-        <button
-          type="button"
-          onClick={() => onCreateWorkspace()}
-          className="mt-3 w-full rounded-md border border-border/70 bg-foreground/[0.04] px-3 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-foreground/[0.08]"
-        >
-          {createWorkspaceLabel}
-        </button>
-      )}
-
       {showColors && onColorChange && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {WORKSPACE_THEME_COLORS.map((swatch) => {
             const selected = color === swatch;
             return (
@@ -128,6 +118,17 @@ export function TabEditPopover({
             );
           })}
         </div>
+      )}
+
+      {showMakeWorkspace && onMakeWorkspace && (
+        <button
+          type="button"
+          onClick={onMakeWorkspace}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-[12px] text-foreground transition-colors hover:bg-white/8"
+        >
+          <LayoutGrid className="size-3.5" strokeWidth={2} />
+          Make workspace
+        </button>
       )}
     </div>
   );

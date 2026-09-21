@@ -1,197 +1,228 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { Fragment, type ReactNode } from "react";
 
-type InlinePart =
-  | { type: "text"; value: string }
-  | { type: "bold"; value: string }
-  | { type: "italic"; value: string }
-  | { type: "code"; value: string };
-
-function parseInline(text: string): InlinePart[] {
-  const parts: InlinePart[] = [];
-  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: "text", value: text.slice(lastIndex, match.index) });
-    }
-    const token = match[0];
-    if (token.startsWith("**")) {
-      parts.push({ type: "bold", value: token.slice(2, -2) });
-    } else if (token.startsWith("`")) {
-      parts.push({ type: "code", value: token.slice(1, -1) });
-    } else if (token.startsWith("*")) {
-      parts.push({ type: "italic", value: token.slice(1, -1) });
-    }
-    lastIndex = match.index + token.length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ type: "text", value: text.slice(lastIndex) });
-  }
-
-  return parts.length ? parts : [{ type: "text", value: text }];
-}
-
-function InlineContent({ text }: { text: string }) {
-  const parts = useMemo(() => parseInline(text), [text]);
-
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.type === "bold") {
-          return (
-            <strong key={index} className="font-semibold text-foreground">
-              {part.value}
-            </strong>
-          );
-        }
-        if (part.type === "italic") {
-          return (
-            <em key={index} className="text-foreground/85">
-              {part.value}
-            </em>
-          );
-        }
-        if (part.type === "code") {
-          return (
-            <code
-              key={index}
-              className="rounded bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[12px] text-foreground/90"
-            >
-              {part.value}
-            </code>
-          );
-        }
-        return <Fragment key={index}>{part.value}</Fragment>;
-      })}
-    </>
-  );
-}
+type ChatMarkdownProps = {
+  content: string;
+};
 
 type Block =
-  | { type: "paragraph"; lines: string[] }
-  | { type: "heading"; level: number; text: string }
-  | { type: "list"; items: string[] }
-  | { type: "comment"; text: string }
-  | { type: "hr" };
+  | { type: "code"; lang: string; code: string }
+  | { type: "heading"; level: 1 | 2 | 3; text: string }
+  | { type: "quote"; text: string }
+  | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "paragraph"; text: string };
 
-function parseBlocks(source: string): Block[] {
-  const lines = source.replace(/\r\n/g, "\n").split("\n");
-  const blocks: Block[] = [];
-  let listBuffer: string[] | null = null;
-
-  const flushList = () => {
-    if (listBuffer?.length) {
-      blocks.push({ type: "list", items: listBuffer });
-      listBuffer = null;
-    }
-  };
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      flushList();
-      continue;
-    }
-
-    if (/^[-*_]{3,}$/.test(trimmed)) {
-      flushList();
-      blocks.push({ type: "hr" });
-      continue;
-    }
-
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading?.[1] && heading[2]) {
-      flushList();
-      blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
-      continue;
-    }
-
-    if (trimmed.startsWith("//")) {
-      flushList();
-      blocks.push({ type: "comment", text: trimmed.slice(2).trim() || trimmed });
-      continue;
-    }
-
-    const bullet = trimmed.match(/^[-*•]\s+(.+)$/);
-    if (bullet?.[1]) {
-      if (!listBuffer) listBuffer = [];
-      listBuffer.push(bullet[1]);
-      continue;
-    }
-
-    flushList();
-    const last = blocks[blocks.length - 1];
-    if (last?.type === "paragraph") {
-      last.lines.push(trimmed);
-    } else {
-      blocks.push({ type: "paragraph", lines: [trimmed] });
-    }
-  }
-
-  flushList();
-  return blocks;
-}
-
-export function ChatMarkdown({ content }: { content: string }) {
-  const blocks = useMemo(() => parseBlocks(content), [content]);
+export function ChatMarkdown({ content }: ChatMarkdownProps) {
+  const blocks = parseBlocks(content.trim());
 
   return (
-    <div className="space-y-2.5 text-[13px] leading-[1.65] text-foreground/92">
-      {blocks.map((block, index) => {
-        if (block.type === "hr") {
-          return <hr key={index} className="border-border/60" />;
-        }
-        if (block.type === "heading") {
-          const size =
-            block.level === 1 ? "text-[15px] font-semibold" : "text-[14px] font-medium";
-          return (
-            <p key={index} className={`${size} tracking-tight text-foreground`}>
-              <InlineContent text={block.text} />
-            </p>
-          );
-        }
-        if (block.type === "comment") {
-          return (
-            <p
-              key={index}
-              className="rounded-md border border-border/40 bg-muted/30 px-2.5 py-1.5 text-[12px] italic text-muted-foreground"
-            >
-              <InlineContent text={block.text} />
-            </p>
-          );
-        }
-        if (block.type === "list") {
-          return (
-            <ul key={index} className="ml-1 space-y-1.5">
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex} className="flex gap-2">
-                  <span className="mt-2 size-1 shrink-0 rounded-full bg-foreground/35" aria-hidden />
-                  <span className="min-w-0 flex-1">
-                    <InlineContent text={item} />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={index} className="whitespace-pre-wrap">
-            {block.lines.map((line, lineIndex) => (
-              <Fragment key={lineIndex}>
-                {lineIndex > 0 ? <br /> : null}
-                <InlineContent text={line} />
-              </Fragment>
-            ))}
-          </p>
-        );
-      })}
+    <div className="chat-md space-y-2.5 text-[13px] leading-[1.65] text-foreground/92">
+      {blocks.map((block, index) => (
+        <Fragment key={index}>{renderBlock(block)}</Fragment>
+      ))}
     </div>
   );
+}
+
+function renderBlock(block: Block): ReactNode {
+  if (block.type === "code") {
+    return (
+      <pre className="overflow-x-auto rounded-lg border border-white/8 bg-[oklch(0.08_0.006_285)] px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground/85">
+        <code>{block.code}</code>
+      </pre>
+    );
+  }
+
+  if (block.type === "heading") {
+    const size =
+      block.level === 1 ? "text-[15px]" : block.level === 2 ? "text-[14px]" : "text-[13px]";
+    return <p className={`${size} font-semibold tracking-tight text-foreground`}>{renderInline(block.text)}</p>;
+  }
+
+  if (block.type === "quote") {
+    return (
+      <blockquote className="border-l-2 border-white/20 pl-3 text-muted-foreground">
+        {renderInline(block.text)}
+      </blockquote>
+    );
+  }
+
+  if (block.type === "list") {
+    const Tag = block.ordered ? "ol" : "ul";
+    return (
+      <Tag className={`space-y-1 pl-4 ${block.ordered ? "list-decimal" : "list-disc"} marker:text-muted-foreground`}>
+        {block.items.map((item, index) => (
+          <li key={index} className="pl-0.5">
+            {renderInline(item)}
+          </li>
+        ))}
+      </Tag>
+    );
+  }
+
+  if (block.type === "paragraph") {
+    if (!block.text) {
+      return <div className="my-1 h-px bg-white/10" aria-hidden />;
+    }
+    return <p>{renderInline(block.text)}</p>;
+  }
+
+  return null;
+}
+
+function parseBlocks(source: string): Block[] {
+  const blocks: Block[] = [];
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+
+    if (line.trim().startsWith("```")) {
+      const lang = line.trim().slice(3).trim();
+      const body: string[] = [];
+      i += 1;
+      while (i < lines.length && !(lines[i] ?? "").trim().startsWith("```")) {
+        body.push(lines[i] ?? "");
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      blocks.push({ type: "code", lang, code: body.join("\n") });
+      continue;
+    }
+
+    if (!line.trim()) {
+      i += 1;
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading?.[1] && heading[2]) {
+      const level = heading[1].length as 1 | 2 | 3;
+      blocks.push({
+        type: "heading",
+        level,
+        text: heading[2],
+      });
+      i += 1;
+      continue;
+    }
+
+    if (/^[-*_]{3,}$/.test(line.trim())) {
+      blocks.push({ type: "paragraph", text: "" });
+      i += 1;
+      continue;
+    }
+
+    if (line.trim().startsWith("> ")) {
+      const quote: string[] = [];
+      while (i < lines.length && (lines[i] ?? "").trim().startsWith("> ")) {
+        quote.push((lines[i] ?? "").trim().replace(/^>\s?/, ""));
+        i += 1;
+      }
+      blocks.push({ type: "quote", text: quote.join(" ") });
+      continue;
+    }
+
+    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (unordered || ordered) {
+      const isOrdered = Boolean(ordered);
+      const items: string[] = [];
+      while (i < lines.length) {
+        const current = lines[i] ?? "";
+        const match = isOrdered
+          ? current.match(/^\s*\d+[.)]\s+(.+)$/)
+          : current.match(/^\s*[-*]\s+(.+)$/);
+        if (!match?.[1]) break;
+        items.push(match[1]);
+        i += 1;
+      }
+      blocks.push({ type: "list", ordered: isOrdered, items });
+      continue;
+    }
+
+    const paragraph: string[] = [];
+    while (i < lines.length) {
+      const current = lines[i] ?? "";
+      if (
+        !current.trim() ||
+        current.trim().startsWith("```") ||
+        current.match(/^(#{1,3})\s+/) ||
+        current.trim().startsWith("> ") ||
+        current.match(/^\s*[-*]\s+/) ||
+        current.match(/^\s*\d+[.)]\s+/)
+      ) {
+        break;
+      }
+      paragraph.push(current);
+      i += 1;
+    }
+    blocks.push({ type: "paragraph", text: paragraph.join(" ") });
+  }
+
+  return blocks.length > 0 ? blocks : [{ type: "paragraph", text: source }];
+}
+
+function renderInline(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern =
+    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\s][^*]*\*)|(_[^_\s][^_]*_)|(\[[^\]]+\]\([^)]+\))/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = pattern.exec(text))) {
+    if (match.index > last) {
+      nodes.push(<Fragment key={key++}>{text.slice(last, match.index)}</Fragment>);
+    }
+
+    const token = match[0];
+    if (token.startsWith("`")) {
+      nodes.push(
+        <code
+          key={key++}
+          className="rounded-md bg-white/8 px-1 py-0.5 font-mono text-[12px] text-foreground"
+        >
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else if (token.startsWith("**") || token.startsWith("__")) {
+      nodes.push(
+        <strong key={key++} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    } else if (token.startsWith("[") && token.includes("](")) {
+      const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (link) {
+        nodes.push(
+          <a
+            key={key++}
+            href={link[2]}
+            target="_blank"
+            rel="noreferrer"
+            className="underline decoration-white/30 underline-offset-2 hover:decoration-white/70"
+          >
+            {link[1]}
+          </a>,
+        );
+      }
+    } else {
+      nodes.push(
+        <em key={key++} className="italic text-foreground/90">
+          {token.slice(1, -1)}
+        </em>,
+      );
+    }
+
+    last = match.index + token.length;
+  }
+
+  if (last < text.length) {
+    nodes.push(<Fragment key={key++}>{text.slice(last)}</Fragment>);
+  }
+
+  return nodes;
 }

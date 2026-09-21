@@ -149,8 +149,7 @@ export function WorkspaceShell() {
         setWorkspaces(
           Object.fromEntries(workspaceRows.map((ws) => [ws.id, normalizeWorkspace(ws)])),
         );
-        setActiveWorkspaceId(null);
-        setViewMode("agent");
+        setActiveWorkspaceId(workspaceRows[0]?.id ?? null);
       } catch (err) {
         if (bootId !== bootIdRef.current) return;
         if (err instanceof ApiError && err.status === 401) {
@@ -205,25 +204,35 @@ export function WorkspaceShell() {
     selectAgent(data.id);
   }
 
-  async function handleCreateWorkspaceForAgent(agentId: string, workspaceName?: string) {
-    const agent = sessions[agentId];
-    const name =
-      workspaceName?.trim() ||
-      `${agent?.name?.trim() || "Agent"} workspace`.slice(0, 64);
-
-    const created = await api<WorkspaceSnapshot>("/api/workspaces", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    });
-
-    const linked = await api<WorkspaceSnapshot>(`/api/workspaces/${created.id}/sessions`, {
-      method: "POST",
-      body: JSON.stringify({ sessionId: agentId }),
-    });
-
-    setWorkspaces((prev) => ({ ...prev, [linked.id]: normalizeWorkspace(linked) }));
+  async function handleCreateWorkspaceFromAgent(agentId: string) {
     setLinkError(null);
-    selectWorkspace(linked.id);
+
+    if (agentWorkspaceMap[agentId]) {
+      setLinkError(`${sessions[agentId]?.name ?? "Agent"} is already in a workspace.`);
+      return;
+    }
+
+    try {
+      const created = await api<WorkspaceSnapshot>("/api/workspaces", {
+        method: "POST",
+        body: JSON.stringify({ name: sessions[agentId]?.name ?? "workspace" }),
+      });
+      const linked = await api<WorkspaceSnapshot>(`/api/workspaces/${created.id}/sessions`, {
+        method: "POST",
+        body: JSON.stringify({ sessionId: agentId }),
+      });
+      setWorkspaces((prev) => ({ ...prev, [linked.id]: normalizeWorkspace(linked) }));
+      selectWorkspace(linked.id);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not create workspace";
+      setLinkError(message);
+      throw err;
+    }
   }
 
   async function handleCloseAgent(sessionId: string) {
@@ -372,7 +381,7 @@ export function WorkspaceShell() {
     if (viewMode === "workspace" && activeWorkspaceId) {
       const ws = workspaces[activeWorkspaceId];
       if (!ws?.sessionIds.length) {
-        throw new Error("This workspace has no agents. Open an agent tab and create a workspace from there.");
+        throw new Error("Drag at least one agent onto this workspace tab first.");
       }
 
       const body = await api<WorkspaceSnapshot>(`/api/workspaces/${activeWorkspaceId}/chat`, {
@@ -458,24 +467,17 @@ export function WorkspaceShell() {
     sessionCount: ws.sessionIds.length,
   }));
 
-  const chatAccentColor =
-    viewMode === "workspace" && activeWorkspace
-      ? activeWorkspace.color
-      : activeAgentId
-        ? workspaceColorForAgent(activeAgentId, agentWorkspaceMap, workspaces)
-        : undefined;
-
   return (
-    <div className="flex h-screen flex-col bg-[oklch(0.055_0.007_285)]">
-      <header className="flex shrink-0 items-center justify-between border-b border-border/50 bg-[oklch(0.07_0.007_285/92%)] px-5 py-3 backdrop-blur-md">
+    <div className="flex h-screen flex-col bg-background">
+      <header className="flex shrink-0 items-center justify-between px-5 py-3">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="size-2 rounded-full bg-foreground shadow-[0_0_12px_oklch(0.98_0_0/35%)]" />
-          <span className="text-sm font-semibold tracking-tight">Synchronicity</span>
+          <div className="size-2 rounded-full bg-foreground" />
+          <span className="text-sm font-medium tracking-tight">Synchronicity</span>
         </Link>
         <div className="flex items-center gap-3">
-          <span className="rounded-full border border-border/60 bg-card/40 px-2.5 py-1 text-[11px] text-muted-foreground">
-            {controllable ? "Manual control" : activeSession?.status ?? "Starting"}
-          </span>
+          <p className="text-xs text-muted-foreground">
+            {controllable ? "You control" : activeSession?.status ?? "booting"}
+          </p>
           <Button
             variant="ghost"
             size="sm"
@@ -489,7 +491,7 @@ export function WorkspaceShell() {
       </header>
 
       {loading && !activeSession ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center border-t border-border">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <SiteLoader label="Starting session" />
         </div>
       ) : error ? (
@@ -497,8 +499,8 @@ export function WorkspaceShell() {
           <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.45fr)]">
-          <div className="min-h-0 overflow-hidden rounded-xl border border-border/50 bg-[oklch(0.075_0.006_285)] p-3 shadow-[0_8px_40px_oklch(0_0_0/35%)]">
+        <div className="grid min-h-0 flex-1 gap-3 px-4 pb-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.4fr)]">
+          <div className="min-h-0">
             <BrowserPanel
               session={browserSessionForPanel}
               loading={loading}
@@ -512,7 +514,7 @@ export function WorkspaceShell() {
               onControl={handleControl}
             />
           </div>
-          <div className="min-h-0 overflow-hidden rounded-xl border border-border/50 bg-[oklch(0.075_0.006_285)] p-3 shadow-[0_8px_40px_oklch(0_0_0/35%)]">
+          <div className="min-h-0">
             <ChatPanel
               session={viewMode === "agent" ? activeSession : null}
               viewMode={viewMode}
@@ -530,10 +532,7 @@ export function WorkspaceShell() {
               onDropAgentOnWorkspace={(wsId, agentId) => void handleDropAgentOnWorkspace(wsId, agentId)}
               onSelectWorkspace={selectWorkspace}
               onSaveWorkspace={handleSaveWorkspace}
-              onCreateWorkspaceFromAgent={(agentId, name) =>
-                handleCreateWorkspaceForAgent(agentId, name)
-              }
-              messageAccentColor={chatAccentColor ?? null}
+              onCreateWorkspaceFromAgent={handleCreateWorkspaceFromAgent}
               title={activeSession?.name ?? "Agent"}
               messages={
                 viewMode === "workspace" && activeWorkspace ? activeWorkspace.messages : undefined

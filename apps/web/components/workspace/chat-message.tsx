@@ -3,7 +3,6 @@
 import { motion } from "motion/react";
 import type { ChatMessage } from "@/lib/session-types";
 import { ChatMarkdown } from "./chat-markdown";
-import { Bot, User } from "lucide-react";
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
@@ -16,31 +15,18 @@ export function ChatMessageBubble({ message, agentLabel, accentColor }: ChatMess
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-      className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
     >
-      <div
-        className={`flex size-7 shrink-0 items-center justify-center rounded-full border ${
-          isUser
-            ? "border-foreground/15 bg-foreground text-background"
-            : "border-border bg-card text-muted-foreground"
-        }`}
-        aria-hidden
-      >
-        {isUser ? <User className="size-3.5" strokeWidth={2} /> : <Bot className="size-3.5" strokeWidth={2} />}
-      </div>
-
-      <div className={`min-w-0 max-w-[min(100%,28rem)] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}>
-        <span className="px-1 text-[11px] font-medium text-muted-foreground">
-          {isUser ? "You" : agentLabel}
-        </span>
+      <div className={`flex min-w-0 max-w-[92%] flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+        <span className="px-1 text-[11px] text-muted-foreground">{isUser ? "You" : agentLabel}</span>
         <div
-          className={`rounded-2xl px-3.5 py-2.5 shadow-sm ${
+          className={`rounded-2xl px-3.5 py-2.5 ${
             isUser
-              ? "rounded-tr-md bg-foreground text-background"
-              : "rounded-tl-md border border-border/80 bg-card/90"
+              ? "rounded-br-md bg-[oklch(0.86_0.02_285)] text-[oklch(0.16_0.01_285)]"
+              : "rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)]"
           }`}
           style={
             !isUser && accentColor

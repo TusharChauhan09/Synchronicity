@@ -69,7 +69,7 @@ export function createWorkspace(userId: string, name?: string): WorkspaceSnapsho
     messages: [
       createMessage(
         'assistant',
-        'Workspace ready. Drag agents onto this workspace, then send one message to run every linked browser.',
+        'Workspace ready. Send one message to run every linked browser. Drag more agents onto this tab to add them.',
       ),
     ],
     running: false,

@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Hand, Loader2, Plus, Sparkles } from "lucide-react";
 import { AGENT_DRAG_MIME } from "@/lib/workspace-colors";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import type { ChatMessage, SessionSnapshot } from "@/lib/session-types";
+import { ChatMessageBubble } from "./chat-message";
 import { PanelTabAccent } from "./panel-tab-accent";
 import {
   panelAddTabClass,
@@ -13,7 +14,6 @@ import {
   panelTabRowClass,
 } from "./panel-tab-styles";
 import { TabEditPopover } from "./tab-edit-popover";
-import { ChatMessageBubble } from "./chat-message";
 
 const STATUS_LINES = ["Thinking", "Figuring", "Browsing", "Working"] as const;
 
@@ -47,8 +47,7 @@ type ChatPanelProps = {
   onDropAgentOnWorkspace?: (workspaceId: string, agentId: string) => void;
   onSelectWorkspace?: (id: string) => void;
   onSaveWorkspace?: (id: string, patch: { name?: string; color?: string }) => Promise<void>;
-  onCreateWorkspaceFromAgent?: (agentId: string, workspaceName?: string) => Promise<void>;
-  messageAccentColor?: string | null;
+  onCreateWorkspaceFromAgent?: (agentId: string) => Promise<void>;
   linkError?: string | null;
   chatReady?: boolean;
   onSend: (message: string) => Promise<void>;
@@ -57,8 +56,8 @@ type ChatPanelProps = {
 };
 
 function statusDot(status: SessionSnapshot["status"] | undefined) {
-  if (status === "running") return "bg-emerald-400 shadow-[0_0_8px_oklch(0.72_0.17_155/50%)]";
-  if (status === "waiting_for_user") return "bg-amber-400 shadow-[0_0_8px_oklch(0.78_0.14_75/50%)]";
+  if (status === "running") return "bg-emerald-400";
+  if (status === "waiting_for_user") return "bg-amber-400";
   return "bg-muted-foreground/40";
 }
 
@@ -79,7 +78,6 @@ export function ChatPanel({
   onSelectWorkspace,
   onSaveWorkspace,
   onCreateWorkspaceFromAgent,
-  messageAccentColor,
   linkError,
   chatReady: chatReadyProp,
   onSend,
@@ -114,6 +112,19 @@ export function ChatPanel({
   }
   const disabled = !chatReady || thinking || waiting;
   const hasMessages = messages.length > 0;
+
+  const editingAgent = agentTabs.find((agent) => agent.id === editingAgentId);
+  const canMakeWorkspace = Boolean(editingAgentId && !editingAgent?.workspaceColor && onCreateWorkspaceFromAgent);
+
+  const headerTitle =
+    viewMode === "workspace"
+      ? workspaceTabs.find((w) => w.id === activeWorkspaceId)?.name ?? title
+      : agentTabs.find((a) => a.id === activeAgentId)?.name ?? title;
+
+  const accentColor =
+    viewMode === "workspace"
+      ? workspaceTabs.find((w) => w.id === activeWorkspaceId)?.color
+      : agentTabs.find((a) => a.id === activeAgentId)?.workspaceColor;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -177,20 +188,6 @@ export function ChatPanel({
     }
   }
 
-  async function handleCreateWorkspaceFromEditor() {
-    if (!editingAgentId || !onCreateWorkspaceFromAgent) return;
-    const name = draftName.trim();
-    try {
-      if (name && onSaveAgentName) {
-        await onSaveAgentName(editingAgentId, name);
-      }
-      await onCreateWorkspaceFromAgent(editingAgentId, name || undefined);
-      closeEditor();
-    } catch {
-      // keep editor open
-    }
-  }
-
   async function handleWorkspaceColorSelect(color: string) {
     if (!editingWorkspaceId || !onSaveWorkspace) return;
     setDraftColor(color);
@@ -199,6 +196,20 @@ export function ChatPanel({
     } catch {
       const ws = workspaceTabs.find((w) => w.id === editingWorkspaceId);
       if (ws) setDraftColor(ws.color);
+    }
+  }
+
+  async function handleMakeWorkspace() {
+    if (!editingAgentId || !onCreateWorkspaceFromAgent) return;
+    const name = draftName.trim();
+    try {
+      if (name && onSaveAgentName) {
+        await onSaveAgentName(editingAgentId, name);
+      }
+      await onCreateWorkspaceFromAgent(editingAgentId);
+      closeEditor();
+    } catch {
+      // keep editor open on failure
     }
   }
 
@@ -222,22 +233,12 @@ export function ChatPanel({
   }
 
   const statusLabel = sending ? "Sending" : STATUS_LINES[statusIndex];
-
-  const headerTitle =
-    viewMode === "workspace"
-      ? workspaceTabs.find((w) => w.id === activeWorkspaceId)?.name ?? title
-      : agentTabs.find((a) => a.id === activeAgentId)?.name ?? title;
-
   const composerPlaceholder =
     viewMode === "workspace"
-      ? "Message all linked agents in this workspace…"
+      ? "Message every agent in this workspace…"
       : waiting
         ? "Resume to continue…"
         : "Ask the agent to browse, search, or act…";
-
-  const editingAgent = editingAgentId
-    ? agentTabs.find((agent) => agent.id === editingAgentId)
-    : undefined;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -252,16 +253,13 @@ export function ChatPanel({
         color={draftColor}
         onColorChange={setDraftColor}
         onColorSelect={(color) => void handleWorkspaceColorSelect(color)}
-        showCreateWorkspace={Boolean(
-          editingAgentId && !editingAgent?.workspaceColor && onCreateWorkspaceFromAgent,
-        )}
-        onCreateWorkspace={() => void handleCreateWorkspaceFromEditor()}
-        createWorkspaceLabel="Create workspace with this agent"
+        showMakeWorkspace={canMakeWorkspace}
+        onMakeWorkspace={() => void handleMakeWorkspace()}
       />
 
       <div className={panelTabRowClass()}>
         {agentTabs.map((agent) => {
-          const isActive = activeAgentId === agent.id;
+          const isActive = viewMode === "agent" && activeAgentId === agent.id;
 
           return (
             <div
@@ -278,14 +276,12 @@ export function ChatPanel({
                 type="button"
                 onClick={() => onSelectAgent?.(agent.id)}
                 onDoubleClick={(event) => {
-                  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                  const rect = (event.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
                   openAgentEdit(agent.id, rect, agent.name);
                 }}
                 className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5`}
               >
-                {!agent.workspaceColor && (
-                  <span className={`size-1.5 shrink-0 rounded-full ${statusDot(agent.status)}`} aria-hidden />
-                )}
+                <span className={`size-1.5 shrink-0 rounded-full ${statusDot(agent.status)}`} aria-hidden />
                 {agent.name}
               </button>
             </div>
@@ -299,7 +295,7 @@ export function ChatPanel({
       </div>
 
       {workspaceTabs.length > 0 && (
-        <div className={`${panelTabRowClass()} mt-0`}>
+        <div className={panelTabRowClass()}>
           {workspaceTabs.map((ws) => {
             const isActive = viewMode === "workspace" && activeWorkspaceId === ws.id;
             const isDropTarget = dropTargetWorkspaceId === ws.id;
@@ -307,7 +303,7 @@ export function ChatPanel({
             return (
               <div
                 key={ws.id}
-                className={`${panelTabClass(isActive, "chat", "sm")} ${isDropTarget ? "ring-1 ring-foreground/40" : ""}`}
+                className={`${panelTabClass(isActive, "chat", "sm")} ${isDropTarget ? "ring-1 ring-foreground/30" : ""}`}
                 onDragOver={(event) => {
                   event.preventDefault();
                   event.dataTransfer.dropEffect = "copy";
@@ -329,15 +325,15 @@ export function ChatPanel({
                     const rect = (event.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
                     openWorkspaceEdit(ws.id, rect, ws.name, ws.color);
                   }}
-                  className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5 font-mono`}
+                  className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5`}
                 >
                   <span
-                    className="size-2 shrink-0 rounded-full border border-white/15"
+                    className="size-2 shrink-0 rounded-full"
                     style={{ backgroundColor: ws.color }}
                     aria-hidden
                   />
                   {ws.name}
-                  <span className="opacity-60">({ws.sessionCount})</span>
+                  <span className="opacity-55">{ws.sessionCount}</span>
                 </button>
               </div>
             );
@@ -345,13 +341,13 @@ export function ChatPanel({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-[oklch(0.1_0.007_285)]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className={`size-2 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
-            <span className="truncate text-sm font-semibold tracking-tight">{headerTitle}</span>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-border bg-[oklch(0.12_0.008_285)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className={`size-1.5 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
+            <span className="text-sm font-medium tracking-tight">{headerTitle}</span>
           </div>
-          <span className="shrink-0 rounded-full bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {waiting ? "Paused" : isRunning ? "Working" : "Ready"}
           </span>
         </div>
@@ -363,17 +359,16 @@ export function ChatPanel({
         )}
 
         <div className="relative min-h-0 flex-1 overflow-y-auto">
-          <div className="px-3 py-4 sm:px-4">
+          <div className="px-4 py-4">
             {!hasMessages && !thinking && (
-              <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 px-4 text-center">
-                <div className="flex size-11 items-center justify-center rounded-2xl border border-border/70 bg-card/60 shadow-inner">
-                  <Sparkles className="size-5 text-muted-foreground" strokeWidth={1.5} />
+              <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
+                <div className="flex size-10 items-center justify-center rounded-2xl border border-white/8 bg-card">
+                  <Sparkles className="size-4 text-muted-foreground" strokeWidth={1.5} />
                 </div>
-                <div className="space-y-2">
-                  <p className="text-[15px] font-medium text-foreground">Start a task</p>
-                  <p className="max-w-[260px] text-[13px] leading-relaxed text-muted-foreground">
-                    Describe what to do in the browser. Double-click an agent tab to rename or create a
-                    workspace.
+                <div className="space-y-1">
+                  <p className="text-sm text-foreground/90">What should I do?</p>
+                  <p className="max-w-[240px] text-xs leading-relaxed text-muted-foreground">
+                    Search, fill forms, or open a site. Double-click an agent tab to name it or start a workspace.
                   </p>
                 </div>
               </div>
@@ -385,7 +380,7 @@ export function ChatPanel({
                   key={message.id}
                   message={message}
                   agentLabel={headerTitle}
-                  accentColor={messageAccentColor}
+                  accentColor={accentColor}
                 />
               ))}
 
@@ -395,17 +390,13 @@ export function ChatPanel({
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="flex items-center gap-2.5 rounded-2xl border border-border/60 bg-card/50 px-3.5 py-2.5"
+                    className="flex items-center gap-2.5 rounded-2xl rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)] px-3.5 py-2.5"
                   >
-                    <Loader2
-                      className="size-4 shrink-0 animate-spin text-muted-foreground"
-                      aria-label={statusLabel}
-                    />
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label={statusLabel} />
                     <motion.span
                       key={statusLabel}
                       initial={{ opacity: 0, y: 2 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
                       className="text-[13px] text-muted-foreground"
                     >
                       {statusLabel}…
@@ -415,39 +406,31 @@ export function ChatPanel({
               </AnimatePresence>
             </div>
 
-            <div ref={bottomRef} className="h-2" />
+            <div ref={bottomRef} className="h-1" />
           </div>
-
-          <div
-            className="pointer-events-none sticky bottom-0 h-8 bg-gradient-to-t from-[oklch(0.1_0.007_285)] to-transparent"
-            aria-hidden
-          />
         </div>
 
         {waiting && (
-          <div className="shrink-0 border-t border-amber-500/25 bg-amber-500/10 px-4 py-3">
+          <div className="shrink-0 border-t border-amber-500/20 bg-amber-500/8 px-4 py-3">
             <p className="text-xs leading-relaxed text-amber-100/85">
-              {session?.waitReason ?? "Paused — interact with the browser, then resume."}
+              {session?.waitReason ?? "Paused — use the browser, then resume."}
             </p>
             <button
               type="button"
               onClick={() => void onResume()}
-              className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-amber-500/35 bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-50 transition-colors hover:bg-amber-500/25"
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-100 hover:bg-amber-500/20"
             >
-              <Hand className="size-3.5" />
+              <Hand className="size-3" />
               Resume agent
             </button>
           </div>
         )}
 
-        <form
-          onSubmit={(event) => void handleSubmit(event)}
-          className="shrink-0 border-t border-border/50 bg-[oklch(0.09_0.006_285)] p-3"
-        >
+        <form onSubmit={(event) => void handleSubmit(event)} className="shrink-0 border-t border-white/6 p-3">
           {sendError && <p className="mb-2 px-1 text-xs text-destructive">{sendError}</p>}
           <div
-            className={`flex items-end gap-2 rounded-xl border border-border/70 bg-card/80 p-2 shadow-sm transition-[border-color,box-shadow] ${
-              disabled ? "opacity-60" : "focus-within:border-foreground/20 focus-within:shadow-[0_0_0_3px_oklch(0.98_0_0/6%)]"
+            className={`flex items-end gap-2 rounded-xl border border-white/8 bg-[oklch(0.1_0.007_285)] p-2 ${
+              disabled ? "opacity-60" : "focus-within:border-white/18"
             }`}
           >
             <textarea
@@ -458,7 +441,7 @@ export function ChatPanel({
               placeholder={composerPlaceholder}
               rows={1}
               disabled={disabled}
-              className="max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/55 disabled:cursor-not-allowed"
+              className="max-h-[120px] min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/55 disabled:cursor-not-allowed"
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -469,10 +452,10 @@ export function ChatPanel({
             <button
               type="submit"
               disabled={disabled || !input.trim()}
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-25"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground text-background disabled:opacity-25"
               aria-label="Send message"
             >
-              <ArrowUp className="size-4" strokeWidth={2.5} />
+              <ArrowUp className="size-3.5" strokeWidth={2.5} />
             </button>
           </div>
         </form>

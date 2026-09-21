@@ -166,14 +166,14 @@ export function BrowserPanel({
           {(loading || isRunning) && (
             <Loader2 className="size-3 animate-spin text-muted-foreground" />
           )}
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {isRunning ? "Running" : waiting ? "Waiting" : "Idle"}
           </span>
           <button
             type="button"
             onClick={onToggleControl}
             disabled={isRunning || waiting || !session}
-            className={`flex items-center gap-1.5 border border-border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] disabled:opacity-40 ${
+            className={`flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] disabled:opacity-40 ${
               manualControl || waiting
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -186,7 +186,7 @@ export function BrowserPanel({
       </div>
 
       {/* Outer browser box — flush below tabs, no inner padding */}
-      <div className="relative mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-[oklch(0.09_0.006_285)] shadow-inner">
+      <div className="relative mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-border bg-[oklch(0.09_0.006_285)]">
         {screenshot ? (
           <div
             ref={surfaceRef}
