@@ -21,6 +21,7 @@ export type WorkspaceSnapshot = {
   id: string;
   name: string;
   sessionIds: string[];
+  sessionColors: Record<string, string>;
   messages: ChatMessage[];
   status: 'idle' | 'running';
 };

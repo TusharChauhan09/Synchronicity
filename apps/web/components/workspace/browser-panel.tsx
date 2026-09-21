@@ -21,6 +21,7 @@ const SPECIAL_KEYS = new Set([
 export type BrowserTab = {
   id: string;
   url: string;
+  accentColor?: string;
 };
 
 type BrowserPanelProps = {
@@ -134,11 +135,19 @@ export function BrowserPanel({
             const isActive = tab.id === activeId;
 
             return (
-              <div key={tab.id} className={panelTabClass(isActive, "browser", "lg")}>
+              <div
+                key={tab.id}
+                className={panelTabClass(isActive, "browser", "md")}
+                style={
+                  tab.accentColor
+                    ? { borderTopWidth: 2, borderTopColor: tab.accentColor }
+                    : undefined
+                }
+              >
                 <button
                   type="button"
                   onClick={() => onTabSelect?.(tab.id)}
-                  className={panelTabLabelClass(isActive, "lg")}
+                  className={panelTabLabelClass(isActive, "md")}
                 >
                   {formatUrl(tab.url)}
                 </button>

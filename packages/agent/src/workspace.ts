@@ -127,7 +127,9 @@ export function addSessionToWorkspace(
   }
 
   const used = new Set(
-    workspace.sessionIds.map((id) => workspace.sessionColors[id]).filter(Boolean),
+    workspace.sessionIds
+      .map((id) => workspace.sessionColors[id])
+      .filter((color): color is string => Boolean(color)),
   );
   workspace.sessionColors[sessionId] = pickWorkspaceColor(used);
   workspace.sessionIds.push(sessionId);

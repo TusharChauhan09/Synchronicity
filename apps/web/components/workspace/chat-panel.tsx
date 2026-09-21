@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Hand, Link2, Loader2, Pencil, Plus, Sparkles } from "lucide-react";
+import { ArrowUp, Hand, Loader2, Pencil, Plus, Sparkles } from "lucide-react";
+import { AGENT_DRAG_MIME } from "@/lib/workspace-colors";
 import { motion, AnimatePresence } from "motion/react";
 import type { ChatMessage, SessionSnapshot } from "@/lib/session-types";
 import {
@@ -17,7 +18,7 @@ export type ChatAgentTab = {
   id: string;
   name: string;
   status: SessionSnapshot["status"];
-  inWorkspace?: boolean;
+  workspaceColor?: string | null;
   lockedInOtherWorkspace?: boolean;
   linkedWorkspaceName?: string;
 };
@@ -26,6 +27,7 @@ export type ChatWorkspaceTab = {
   id: string;
   name: string;
   sessionCount: number;
+  memberColors: string[];
 };
 
 type ChatPanelProps = {
@@ -42,7 +44,8 @@ type ChatPanelProps = {
   onSelectAgent?: (id: string) => void;
   onAddAgent?: () => void;
   onRenameAgent?: (id: string) => void;
-  onLinkAgentToWorkspace?: (agentId: string) => void;
+  onDropAgentOnWorkspace?: (workspaceId: string, agentId: string) => void;
+  onPickAgentWorkspaceColor?: (agentId: string) => void;
   onSelectWorkspace?: (id: string) => void;
   onAddWorkspace?: () => void;
   onRenameWorkspace?: (id: string) => void;
@@ -73,7 +76,8 @@ export function ChatPanel({
   onSelectAgent,
   onAddAgent,
   onRenameAgent,
-  onLinkAgentToWorkspace,
+  onDropAgentOnWorkspace,
+  onPickAgentWorkspaceColor,
   onSelectWorkspace,
   onAddWorkspace,
   onRenameWorkspace,
@@ -87,6 +91,7 @@ export function ChatPanel({
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [statusIndex, setStatusIndex] = useState(0);
+  const [dropTargetWorkspaceId, setDropTargetWorkspaceId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -95,7 +100,14 @@ export function ChatPanel({
   const isRunning = status === "running";
   const waiting = status === "waiting_for_user";
   const thinking = isRunning || sending;
-  const chatReady = chatReadyProp ?? (messagesOverride !== undefined || Boolean(session));
+  let chatReady = false;
+  if (chatReadyProp !== undefined) {
+    chatReady = chatReadyProp;
+  } else if (messagesOverride !== undefined) {
+    chatReady = true;
+  } else {
+    chatReady = Boolean(session);
+  }
   const disabled = !chatReady || thinking || waiting;
   const hasMessages = messages.length > 0;
 
@@ -161,52 +173,60 @@ export function ChatPanel({
       <div className={panelTabRowClass()}>
         {agentTabs.map((agent) => {
           const isActive = activeAgentId === agent.id;
-          const linkDisabled =
-            Boolean(agent.lockedInOtherWorkspace) && !agent.inWorkspace;
 
           return (
-            <div key={agent.id} className={panelTabClass(isActive, "chat", "lg")}>
+            <div
+              key={agent.id}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData(AGENT_DRAG_MIME, agent.id);
+                event.dataTransfer.effectAllowed = "copyMove";
+              }}
+              className={panelTabClass(isActive, "chat", "sm")}
+              style={
+                agent.workspaceColor
+                  ? { borderTopWidth: 2, borderTopColor: agent.workspaceColor }
+                  : undefined
+              }
+            >
+              {agent.workspaceColor ? (
+                <button
+                  type="button"
+                  title="Change workspace color"
+                  onClick={() => onPickAgentWorkspaceColor?.(agent.id)}
+                  className="flex w-6 shrink-0 items-center justify-center border-r border-border"
+                  aria-label={`Color for ${agent.name}`}
+                >
+                  <span
+                    className="size-2 rounded-full border border-white/20"
+                    style={{ backgroundColor: agent.workspaceColor }}
+                  />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => onSelectAgent?.(agent.id)}
-                className={`${panelTabLabelClass(isActive, "lg")} flex items-center gap-2`}
+                className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5`}
               >
-                <span className={`size-1.5 shrink-0 rounded-full ${statusDot(agent.status)}`} aria-hidden />
+                {!agent.workspaceColor && (
+                  <span className={`size-1.5 shrink-0 rounded-full ${statusDot(agent.status)}`} aria-hidden />
+                )}
                 {agent.name}
               </button>
               <button
                 type="button"
                 aria-label={`Rename ${agent.name}`}
                 onClick={() => onRenameAgent?.(agent.id)}
-                className="flex w-8 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
+                className="flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
               >
-                <Pencil className="size-3" />
+                <Pencil className="size-2.5" />
               </button>
-              {onLinkAgentToWorkspace && activeWorkspaceId && (
-                <button
-                  type="button"
-                  disabled={linkDisabled}
-                  title={
-                    agent.inWorkspace
-                      ? `Remove from ${activeWorkspaceName ?? "workspace"}`
-                      : linkDisabled
-                        ? `Already in ${agent.linkedWorkspaceName ?? "another workspace"}`
-                        : `Add to ${activeWorkspaceName ?? "workspace"}`
-                  }
-                  onClick={() => onLinkAgentToWorkspace(agent.id)}
-                  className={`flex w-8 shrink-0 items-center justify-center border-l border-border disabled:cursor-not-allowed disabled:opacity-35 ${
-                    agent.inWorkspace ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Link2 className="size-3" />
-                </button>
-              )}
             </div>
           );
         })}
         {onAddAgent && (
           <button type="button" onClick={onAddAgent} aria-label="New agent" className={panelAddTabClass("chat")}>
-            <Plus className="size-4" strokeWidth={2.5} />
+            <Plus className="size-3" strokeWidth={2.5} />
           </button>
         )}
       </div>
@@ -215,21 +235,45 @@ export function ChatPanel({
         <div className={`${panelTabRowClass()} mt-0`}>
           {workspaceTabs.map((ws) => {
             const isActive = viewMode === "workspace" && activeWorkspaceId === ws.id;
+            const isDropTarget = dropTargetWorkspaceId === ws.id;
+
             return (
-              <div key={ws.id} className={panelTabClass(isActive, "chat", "md")}>
+              <div
+                key={ws.id}
+                className={`${panelTabClass(isActive, "chat", "sm")} ${isDropTarget ? "ring-1 ring-foreground/40" : ""}`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                  setDropTargetWorkspaceId(ws.id);
+                }}
+                onDragLeave={() => setDropTargetWorkspaceId(null)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDropTargetWorkspaceId(null);
+                  const agentId = event.dataTransfer.getData(AGENT_DRAG_MIME);
+                  if (agentId) onDropAgentOnWorkspace?.(ws.id, agentId);
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => onSelectWorkspace?.(ws.id)}
-                  className={`${panelTabLabelClass(isActive, "md")} font-mono`}
+                  className={`${panelTabLabelClass(isActive, "sm")} flex items-center gap-1.5 font-mono`}
                 >
+                  {ws.memberColors.map((color, index) => (
+                    <span
+                      key={`${ws.id}-${index}`}
+                      className="size-1.5 shrink-0 rounded-full border border-white/10"
+                      style={{ backgroundColor: color }}
+                      aria-hidden
+                    />
+                  ))}
                   {ws.name}
-                  <span className="ml-1 opacity-70">({ws.sessionCount})</span>
                 </button>
                 <button
                   type="button"
                   aria-label={`Rename ${ws.name}`}
                   onClick={() => onRenameWorkspace?.(ws.id)}
-                  className="flex w-7 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
+                  className="flex w-6 shrink-0 items-center justify-center border-l border-border text-muted-foreground hover:text-foreground"
                 >
                   <Pencil className="size-2.5" />
                 </button>
@@ -265,6 +309,9 @@ export function ChatPanel({
             {linkError}
           </p>
         )}
+        <p className="shrink-0 border-b border-border/60 px-4 py-1.5 font-mono text-[9px] text-muted-foreground">
+          Drag an agent tab onto a workspace to link · drop again on the same workspace to unlink
+        </p>
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="px-4 py-4">

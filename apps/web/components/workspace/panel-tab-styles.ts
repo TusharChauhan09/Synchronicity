@@ -9,8 +9,8 @@ const SURFACE_BG: Record<TabSurface, string> = {
 
 const SURFACE_INACTIVE = "bg-[oklch(0.07_0.005_285)]";
 
-export function panelTabClass(isActive: boolean, surface: TabSurface, size: "md" | "lg" = "lg") {
-  const height = size === "lg" ? (isActive ? "h-10" : "h-9") : isActive ? "h-9" : "h-8";
+export function panelTabClass(isActive: boolean, surface: TabSurface, size: "sm" | "md" = "sm") {
+  const height = size === "md" ? (isActive ? "h-8" : "h-7") : isActive ? "h-7" : "h-6";
 
   return cn(
     "flex shrink-0 items-stretch border border-border -ml-px first:ml-0 transition-colors",
@@ -21,10 +21,12 @@ export function panelTabClass(isActive: boolean, surface: TabSurface, size: "md"
   );
 }
 
-export function panelTabLabelClass(isActive: boolean, size: "md" | "lg" = "lg") {
+export function panelTabLabelClass(isActive: boolean, size: "sm" | "md" = "sm") {
   return cn(
     "truncate text-left font-medium",
-    size === "lg" ? "min-w-[120px] max-w-[240px] px-3.5 text-[13px]" : "min-w-[100px] max-w-[200px] px-3 text-[11px] font-mono",
+    size === "md"
+      ? "min-w-[88px] max-w-[180px] px-2.5 text-[11px]"
+      : "min-w-[72px] max-w-[140px] px-2 text-[10px] font-mono",
     isActive ? "text-foreground" : "text-muted-foreground",
   );
 }
@@ -35,7 +37,7 @@ export function panelTabRowClass() {
 
 export function panelAddTabClass(surface: TabSurface) {
   return cn(
-    "flex h-9 w-9 shrink-0 items-center justify-center border border-border -ml-px text-muted-foreground hover:text-foreground",
+    "flex h-6 w-6 shrink-0 items-center justify-center border border-border -ml-px text-muted-foreground hover:text-foreground",
     SURFACE_INACTIVE,
     "hover:bg-[oklch(0.1_0.006_285)]",
   );

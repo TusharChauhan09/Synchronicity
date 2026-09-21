@@ -22,6 +22,10 @@ function formatTabUrl(url?: string) {
   return url.replace(/^https?:\/\//, "") || "new tab";
 }
 
+function normalizeWorkspace(ws: WorkspaceSnapshot): WorkspaceSnapshot {
+  return { ...ws, sessionColors: ws.sessionColors ?? {} };
+}
+
 export function WorkspaceShell() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Record<string, SessionSnapshot>>({});
@@ -33,9 +37,12 @@ export function WorkspaceShell() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manualControl, setManualControl] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<{ kind: "agent" | "workspace"; id: string } | null>(
-    null,
-  );
+  const [renameTarget, setRenameTarget] = useState<
+    | { kind: "agent"; id: string }
+    | { kind: "workspace"; id: string }
+    | { kind: "agent-color"; workspaceId: string; sessionId: string }
+    | null
+  >(null);
   const [renameValue, setRenameValue] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const bootIdRef = useRef(0);
@@ -106,7 +113,7 @@ export function WorkspaceShell() {
   const refreshAllWorkspaces = useCallback(async () => {
     try {
       const list = await api<WorkspaceSnapshot[]>("/api/workspaces");
-      setWorkspaces(Object.fromEntries(list.map((ws) => [ws.id, ws])));
+      setWorkspaces(Object.fromEntries(list.map((ws) => [ws.id, normalizeWorkspace(ws)])));
     } catch {
       // ignore
     }
@@ -145,7 +152,9 @@ export function WorkspaceShell() {
         setSessions(Object.fromEntries(sessionList.map((s) => [s.id, s])));
         setSessionOrder(sessionList.map((s) => s.id));
         setActiveAgentId(sessionList[0]?.id ?? null);
-        setWorkspaces(Object.fromEntries(workspaceListBoot.map((ws) => [ws.id, ws])));
+        setWorkspaces(
+          Object.fromEntries(workspaceListBoot.map((ws) => [ws.id, normalizeWorkspace(ws)])),
+        );
         setActiveWorkspaceId(workspaceListBoot[0]?.id ?? null);
       } catch (err) {
         if (bootId !== bootIdRef.current) return;
@@ -240,27 +249,32 @@ export function WorkspaceShell() {
     }
   }
 
-  async function handleToggleWorkspaceLink(agentId: string) {
-    if (!activeWorkspaceId) return;
-    const ws = workspaces[activeWorkspaceId];
+  async function handleDropAgentOnWorkspace(workspaceId: string, agentId: string) {
+    const ws = workspaces[workspaceId];
     if (!ws) return;
 
     setLinkError(null);
 
-    try {
-      const wasLinked = ws.sessionIds.includes(agentId);
+    const linkedWorkspaceId = agentWorkspaceMap[agentId];
+    if (linkedWorkspaceId && linkedWorkspaceId !== workspaceId) {
+      const other = workspaces[linkedWorkspaceId];
+      setLinkError(
+        `${sessions[agentId]?.name ?? "Agent"} is already in ${other?.name ?? "another workspace"}.`,
+      );
+      return;
+    }
 
-      if (wasLinked) {
-        await api<WorkspaceSnapshot>(
-          `/api/workspaces/${activeWorkspaceId}/sessions/${agentId}`,
-          { method: "DELETE" },
-        );
+    try {
+      if (ws.sessionIds.includes(agentId)) {
+        await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}/sessions/${agentId}`, {
+          method: "DELETE",
+        });
       } else {
-        await api<WorkspaceSnapshot>(`/api/workspaces/${activeWorkspaceId}/sessions`, {
+        await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}/sessions`, {
           method: "POST",
           body: JSON.stringify({ sessionId: agentId }),
         });
-        selectWorkspace(activeWorkspaceId);
+        selectWorkspace(workspaceId);
       }
 
       await refreshAllWorkspaces();
@@ -275,10 +289,29 @@ export function WorkspaceShell() {
     }
   }
 
+  function pollWorkspaceUntilIdle(workspaceId: string) {
+    const tick = async () => {
+      try {
+        const latest = await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}`);
+        setWorkspaces((prev) => ({ ...prev, [latest.id]: latest }));
+        if (latest.status === "running") {
+          window.setTimeout(() => void tick(), 700);
+          return;
+        }
+        for (const sessionId of latest.sessionIds) {
+          void refreshSession(sessionId);
+        }
+      } catch {
+        window.setTimeout(() => void tick(), 1000);
+      }
+    };
+    void tick();
+  }
+
   async function handleRenameSubmit() {
     if (!renameTarget) return;
     const name = renameValue.trim();
-    if (!name) return;
+    if (renameTarget.kind !== "agent-color" && !name) return;
 
     if (renameTarget.kind === "agent") {
       const updated = await api<SessionSnapshot>(`/api/session/${renameTarget.id}`, {
@@ -286,11 +319,17 @@ export function WorkspaceShell() {
         body: JSON.stringify({ name }),
       });
       setSessions((prev) => ({ ...prev, [updated.id]: updated }));
-    } else {
+    } else if (renameTarget.kind === "workspace") {
       const updated = await api<WorkspaceSnapshot>(`/api/workspaces/${renameTarget.id}`, {
         method: "PATCH",
         body: JSON.stringify({ name }),
       });
+      setWorkspaces((prev) => ({ ...prev, [updated.id]: updated }));
+    } else {
+      const updated = await api<WorkspaceSnapshot>(
+        `/api/workspaces/${renameTarget.workspaceId}/sessions/${renameTarget.sessionId}`,
+        { method: "PATCH", body: JSON.stringify({ color: name }) },
+      );
       setWorkspaces((prev) => ({ ...prev, [updated.id]: updated }));
     }
 
@@ -321,27 +360,15 @@ export function WorkspaceShell() {
     if (viewMode === "workspace" && activeWorkspaceId) {
       const ws = workspaces[activeWorkspaceId];
       if (!ws?.sessionIds.length) {
-        throw new Error("Link at least one agent to this workspace (chain icon on agent tabs).");
+        throw new Error("Drag at least one agent onto this workspace tab first.");
       }
-
-      setWorkspaces((prev) => {
-        const current = prev[activeWorkspaceId];
-        if (!current) return prev;
-        return {
-          ...prev,
-          [activeWorkspaceId]: { ...current, status: "running" as const },
-        };
-      });
 
       const body = await api<WorkspaceSnapshot>(`/api/workspaces/${activeWorkspaceId}/chat`, {
         method: "POST",
         body: JSON.stringify({ message }),
       });
       setWorkspaces((prev) => ({ ...prev, [body.id]: body }));
-
-      for (const sessionId of body.sessionIds) {
-        void refreshSession(sessionId);
-      }
+      pollWorkspaceUntilIdle(activeWorkspaceId);
       return;
     }
 
@@ -368,6 +395,7 @@ export function WorkspaceShell() {
       return activeWorkspace.sessionIds.map((id) => ({
         id,
         url: formatTabUrl(sessions[id]?.url),
+        accentColor: activeWorkspace.sessionColors?.[id],
       }));
     }
 
@@ -411,7 +439,7 @@ export function WorkspaceShell() {
       id: agent.id,
       name: agent.name,
       status: agent.status,
-      inWorkspace: linkedWorkspaceId === activeWorkspaceId,
+      workspaceColor: linkedWorkspace?.sessionColors?.[agent.id] ?? null,
       lockedInOtherWorkspace:
         Boolean(linkedWorkspaceId) && linkedWorkspaceId !== activeWorkspaceId,
       linkedWorkspaceName: linkedWorkspace?.name,
@@ -422,6 +450,9 @@ export function WorkspaceShell() {
     id: ws.id,
     name: ws.name,
     sessionCount: ws.sessionIds.length,
+    memberColors: ws.sessionIds
+      .map((id) => ws.sessionColors?.[id])
+      .filter((color): color is string => Boolean(color)),
   }));
 
   return (
@@ -455,13 +486,24 @@ export function WorkspaceShell() {
             void handleRenameSubmit();
           }}
         >
-          <span className="text-xs text-muted-foreground">Rename</span>
-          <input
-            value={renameValue}
-            onChange={(event) => setRenameValue(event.target.value)}
-            className="flex-1 max-w-sm border border-border bg-background px-2 py-1 text-sm outline-none"
-            autoFocus
-          />
+          <span className="text-xs text-muted-foreground">
+            {renameTarget.kind === "agent-color" ? "Agent color" : "Rename"}
+          </span>
+          {renameTarget.kind === "agent-color" ? (
+            <input
+              type="color"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              className="h-8 w-12 cursor-pointer border border-border bg-background"
+            />
+          ) : (
+            <input
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              className="flex-1 max-w-sm border border-border bg-background px-2 py-1 text-sm outline-none"
+              autoFocus
+            />
+          )}
           <Button type="submit" size="sm">Save</Button>
           <Button
             type="button"
@@ -522,7 +564,14 @@ export function WorkspaceShell() {
               chatReady={
                 viewMode === "workspace" ? Boolean(activeWorkspace) : Boolean(activeSession)
               }
-              onLinkAgentToWorkspace={(id) => void handleToggleWorkspaceLink(id)}
+              onDropAgentOnWorkspace={(wsId, agentId) => void handleDropAgentOnWorkspace(wsId, agentId)}
+              onPickAgentWorkspaceColor={(agentId) => {
+                const wsId = agentWorkspaceMap[agentId];
+                if (!wsId) return;
+                const color = workspaces[wsId]?.sessionColors?.[agentId] ?? "#f87171";
+                setRenameTarget({ kind: "agent-color", workspaceId: wsId, sessionId: agentId });
+                setRenameValue(color);
+              }}
               onSelectWorkspace={selectWorkspace}
               onAddWorkspace={() => void handleAddWorkspace()}
               onRenameWorkspace={(id) => {

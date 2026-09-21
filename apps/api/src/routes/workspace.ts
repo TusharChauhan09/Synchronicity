@@ -22,5 +22,6 @@ workspaceRoutes.get('/api/workspaces/:id', getWorkspace);
 workspaceRoutes.patch('/api/workspaces/:id', patchWorkspace);
 workspaceRoutes.delete('/api/workspaces/:id', deleteWorkspaceHandler);
 workspaceRoutes.post('/api/workspaces/:id/sessions', linkSession);
+workspaceRoutes.patch('/api/workspaces/:id/sessions/:sessionId', patchWorkspaceSession);
 workspaceRoutes.delete('/api/workspaces/:id/sessions/:sessionId', unlinkSession);
 workspaceRoutes.post('/api/workspaces/:id/chat', chatWorkspace);
