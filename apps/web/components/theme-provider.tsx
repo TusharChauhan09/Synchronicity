@@ -21,6 +21,17 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+function runViewTransition(update: () => void) {
+  const doc = document as Document & {
+    startViewTransition?: (callback: () => void) => void;
+  };
+  if (typeof doc.startViewTransition === "function") {
+    doc.startViewTransition(update);
+    return true;
+  }
+  return false;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [pendingTheme, setPendingTheme] = useState<Theme | null>(null);
@@ -37,12 +48,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = useCallback(
     (next: Theme) => {
-      if (next === theme || isTransitioning) {
-        commitTheme(next);
+      if (next === theme && !isTransitioning) return;
+      if (isTransitioning) return;
+
+      setIsTransitioning(true);
+
+      const apply = () => commitTheme(next);
+
+      if (runViewTransition(apply)) {
+        window.setTimeout(() => setIsTransitioning(false), 560);
         return;
       }
+
       setPendingTheme(next);
-      setIsTransitioning(true);
     },
     [commitTheme, isTransitioning, theme],
   );
@@ -60,7 +78,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     <ThemeContext.Provider value={value}>
       {children}
       <AnimatePresence>
-        {pendingTheme && isTransitioning ? (
+        {pendingTheme ? (
           <motion.div
             key={pendingTheme}
             className="pointer-events-none fixed inset-0 z-[10000] bg-background"
@@ -70,7 +88,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             style={{ transformOrigin: "top" }}
             onAnimationStart={() => {
-              if (pendingTheme) commitTheme(pendingTheme);
+              commitTheme(pendingTheme);
             }}
             onAnimationComplete={() => {
               setPendingTheme(null);

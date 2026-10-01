@@ -159,10 +159,17 @@
 @layer utilities {
   .dot-grid {
     background-image: radial-gradient(
-      oklch(1 0 0 / 7%) 1px,
+      oklch(0.16 0.01 285 / 8%) 1px,
       transparent 1px
     );
     background-size: 24px 24px;
+  }
+
+  .dark .dot-grid {
+    background-image: radial-gradient(
+      oklch(1 0 0 / 7%) 1px,
+      transparent 1px
+    );
   }
 
   .glow-top {

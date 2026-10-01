@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
 import { SiteLoader } from "./site-loader";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import {
   ResizableHandle,
@@ -573,6 +574,7 @@ export function WorkspaceShell() {
         </Link>
         <div className="flex items-center gap-3">
           <p className="text-xs tabular-nums text-muted-foreground">{headerStatusLabel}</p>
+          <ThemeToggle />
           <UserMenu />
         </div>
       </header>
