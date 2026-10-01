@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { LayoutGrid } from "lucide-react";
+import { LayoutGrid, Trash2 } from "lucide-react";
 import { WORKSPACE_THEME_COLORS } from "@/lib/workspace-colors";
 
 type TabEditPopoverProps = {
@@ -18,6 +18,8 @@ type TabEditPopoverProps = {
   showColors?: boolean;
   showMakeWorkspace?: boolean;
   onMakeWorkspace?: () => void;
+  showRemoveWorkspace?: boolean;
+  onRemoveWorkspace?: () => void;
 };
 
 export function TabEditPopover({
@@ -33,6 +35,8 @@ export function TabEditPopover({
   showColors = false,
   showMakeWorkspace = false,
   onMakeWorkspace,
+  showRemoveWorkspace = false,
+  onRemoveWorkspace,
 }: TabEditPopoverProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -128,6 +132,17 @@ export function TabEditPopover({
         >
           <LayoutGrid className="size-3.5" strokeWidth={2} />
           Make workspace
+        </button>
+      )}
+
+      {showRemoveWorkspace && onRemoveWorkspace && (
+        <button
+          type="button"
+          onClick={onRemoveWorkspace}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive transition-colors hover:bg-destructive/20"
+        >
+          <Trash2 className="size-3.5" strokeWidth={2} />
+          Remove workspace
         </button>
       )}
     </div>

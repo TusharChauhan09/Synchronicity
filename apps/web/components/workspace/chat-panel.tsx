@@ -45,9 +45,11 @@ type ChatPanelProps = {
   onAddAgent?: () => void;
   onSaveAgentName?: (id: string, name: string) => Promise<void>;
   onDropAgentOnWorkspace?: (workspaceId: string, agentId: string) => void;
+  onUnlinkAgent?: (agentId: string) => void;
   onSelectWorkspace?: (id: string) => void;
   onSaveWorkspace?: (id: string, patch: { name?: string; color?: string }) => Promise<void>;
   onCreateWorkspaceFromAgent?: (agentId: string) => Promise<void>;
+  onDeleteWorkspace?: (id: string) => Promise<void>;
   linkError?: string | null;
   chatReady?: boolean;
   onSend: (message: string) => Promise<void>;
@@ -75,9 +77,11 @@ export function ChatPanel({
   onAddAgent,
   onSaveAgentName,
   onDropAgentOnWorkspace,
+  onUnlinkAgent,
   onSelectWorkspace,
   onSaveWorkspace,
   onCreateWorkspaceFromAgent,
+  onDeleteWorkspace,
   linkError,
   chatReady: chatReadyProp,
   onSend,
@@ -89,6 +93,7 @@ export function ChatPanel({
   const [sendError, setSendError] = useState<string | null>(null);
   const [statusIndex, setStatusIndex] = useState(0);
   const [dropTargetWorkspaceId, setDropTargetWorkspaceId] = useState<string | null>(null);
+  const droppedOnWorkspaceRef = useRef(false);
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -120,11 +125,6 @@ export function ChatPanel({
     viewMode === "workspace"
       ? workspaceTabs.find((w) => w.id === activeWorkspaceId)?.name ?? title
       : agentTabs.find((a) => a.id === activeAgentId)?.name ?? title;
-
-  const accentColor =
-    viewMode === "workspace"
-      ? workspaceTabs.find((w) => w.id === activeWorkspaceId)?.color
-      : agentTabs.find((a) => a.id === activeAgentId)?.workspaceColor;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -199,6 +199,16 @@ export function ChatPanel({
     }
   }
 
+  async function handleDeleteWorkspace() {
+    if (!editingWorkspaceId || !onDeleteWorkspace) return;
+    try {
+      await onDeleteWorkspace(editingWorkspaceId);
+      closeEditor();
+    } catch {
+      // keep editor open on failure
+    }
+  }
+
   async function handleMakeWorkspace() {
     if (!editingAgentId || !onCreateWorkspaceFromAgent) return;
     const name = draftName.trim();
@@ -241,7 +251,7 @@ export function ChatPanel({
         : "Ask the agent to browse, search, or act…";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full w-full max-w-full min-h-0 min-w-0 flex-col overflow-hidden">
       <TabEditPopover
         open={Boolean(editingAgentId || editingWorkspaceId)}
         anchorRect={anchorRect}
@@ -255,9 +265,12 @@ export function ChatPanel({
         onColorSelect={(color) => void handleWorkspaceColorSelect(color)}
         showMakeWorkspace={canMakeWorkspace}
         onMakeWorkspace={() => void handleMakeWorkspace()}
+        showRemoveWorkspace={Boolean(editingWorkspaceId && onDeleteWorkspace)}
+        onRemoveWorkspace={() => void handleDeleteWorkspace()}
       />
 
-      <div className={panelTabRowClass()}>
+      <div className="min-w-0 max-w-full shrink-0 overflow-hidden">
+        <div className={panelTabRowClass()}>
         {agentTabs.map((agent) => {
           const isActive = viewMode === "agent" && activeAgentId === agent.id;
 
@@ -266,8 +279,14 @@ export function ChatPanel({
               key={agent.id}
               draggable
               onDragStart={(event) => {
+                droppedOnWorkspaceRef.current = false;
                 event.dataTransfer.setData(AGENT_DRAG_MIME, agent.id);
                 event.dataTransfer.effectAllowed = "copyMove";
+              }}
+              onDragEnd={() => {
+                if (!droppedOnWorkspaceRef.current && agent.workspaceColor) {
+                  onUnlinkAgent?.(agent.id);
+                }
               }}
               className={panelTabClass(isActive, "chat", "sm")}
             >
@@ -292,9 +311,11 @@ export function ChatPanel({
             <Plus className="size-3" strokeWidth={2.5} />
           </button>
         )}
+        </div>
       </div>
 
       {workspaceTabs.length > 0 && (
+        <div className="min-w-0 max-w-full shrink-0 overflow-hidden">
         <div className={panelTabRowClass()}>
           {workspaceTabs.map((ws) => {
             const isActive = viewMode === "workspace" && activeWorkspaceId === ws.id;
@@ -312,6 +333,7 @@ export function ChatPanel({
                 onDragLeave={() => setDropTargetWorkspaceId(null)}
                 onDrop={(event) => {
                   event.preventDefault();
+                  droppedOnWorkspaceRef.current = true;
                   setDropTargetWorkspaceId(null);
                   const agentId = event.dataTransfer.getData(AGENT_DRAG_MIME);
                   if (agentId) onDropAgentOnWorkspace?.(ws.id, agentId);
@@ -339,13 +361,14 @@ export function ChatPanel({
             );
           })}
         </div>
+        </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-border bg-[oklch(0.12_0.008_285)]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-2.5">
-          <div className="flex items-center gap-2">
+      <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-x-clip overflow-y-hidden rounded-b-xl border border-border bg-[oklch(0.12_0.008_285)]">
+        <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-2.5">
+          <div className="flex min-w-0 items-center gap-2">
             <span className={`size-1.5 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
-            <span className="text-sm font-medium tracking-tight">{headerTitle}</span>
+            <span className="truncate text-sm font-medium tracking-tight">{headerTitle}</span>
           </div>
           <span className="text-[11px] text-muted-foreground">
             {waiting ? "Paused" : isRunning ? "Working" : "Ready"}
@@ -358,8 +381,8 @@ export function ChatPanel({
           </p>
         )}
 
-        <div className="relative min-h-0 flex-1 overflow-y-auto">
-          <div className="px-4 py-4">
+        <div className="chat-messages-scroll relative min-h-0 min-w-0 w-full max-w-full flex-1">
+          <div className="box-border min-w-0 w-full max-w-full px-4 py-4">
             {!hasMessages && !thinking && (
               <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
                 <div className="flex size-10 items-center justify-center rounded-2xl border border-white/8 bg-card">
@@ -374,13 +397,12 @@ export function ChatPanel({
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               {messages.map((message) => (
                 <ChatMessageBubble
                   key={message.id}
                   message={message}
                   agentLabel={headerTitle}
-                  accentColor={accentColor}
                 />
               ))}
 
@@ -390,7 +412,7 @@ export function ChatPanel({
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="flex items-center gap-2.5 rounded-2xl rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)] px-3.5 py-2.5"
+                    className="flex max-w-full min-w-0 items-center gap-2.5 rounded-2xl rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)] px-3.5 py-2.5"
                   >
                     <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label={statusLabel} />
                     <motion.span
@@ -426,10 +448,13 @@ export function ChatPanel({
           </div>
         )}
 
-        <form onSubmit={(event) => void handleSubmit(event)} className="shrink-0 border-t border-white/6 p-3">
+        <form
+          onSubmit={(event) => void handleSubmit(event)}
+          className="min-w-0 shrink-0 border-t border-white/6 p-3"
+        >
           {sendError && <p className="mb-2 px-1 text-xs text-destructive">{sendError}</p>}
           <div
-            className={`flex items-end gap-2 rounded-xl border border-white/8 bg-[oklch(0.1_0.007_285)] p-2 ${
+            className={`flex min-w-0 items-end gap-2 rounded-xl border border-white/8 bg-[oklch(0.1_0.007_285)] p-2 ${
               disabled ? "opacity-60" : "focus-within:border-white/18"
             }`}
           >
@@ -441,7 +466,7 @@ export function ChatPanel({
               placeholder={composerPlaceholder}
               rows={1}
               disabled={disabled}
-              className="max-h-[120px] min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/55 disabled:cursor-not-allowed"
+              className="max-h-[120px] min-h-[36px] min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-muted-foreground/55 disabled:cursor-not-allowed"
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();

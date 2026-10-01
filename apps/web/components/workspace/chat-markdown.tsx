@@ -17,7 +17,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
   const blocks = parseBlocks(content.trim());
 
   return (
-    <div className="chat-md space-y-2.5 text-[13px] leading-[1.65] text-foreground/92">
+    <div className="chat-md min-w-0 w-full max-w-full overflow-hidden space-y-2.5 break-words text-[13px] leading-[1.65] text-foreground/92">
       {blocks.map((block, index) => (
         <Fragment key={index}>{renderBlock(block)}</Fragment>
       ))}
@@ -28,7 +28,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 function renderBlock(block: Block): ReactNode {
   if (block.type === "code") {
     return (
-      <pre className="overflow-x-auto rounded-lg border border-white/8 bg-[oklch(0.08_0.006_285)] px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground/85">
+      <pre className="overflow-x-hidden whitespace-pre-wrap break-all rounded-lg border border-white/8 bg-[oklch(0.08_0.006_285)] px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground/85">
         <code>{block.code}</code>
       </pre>
     );
@@ -51,9 +51,11 @@ function renderBlock(block: Block): ReactNode {
   if (block.type === "list") {
     const Tag = block.ordered ? "ol" : "ul";
     return (
-      <Tag className={`space-y-1 pl-4 ${block.ordered ? "list-decimal" : "list-disc"} marker:text-muted-foreground`}>
+      <Tag
+        className={`min-w-0 max-w-full space-y-1 overflow-hidden pl-4 ${block.ordered ? "list-decimal" : "list-disc"} marker:text-muted-foreground`}
+      >
         {block.items.map((item, index) => (
-          <li key={index} className="pl-0.5">
+          <li key={index} className="min-w-0 pl-0.5">
             {renderInline(item)}
           </li>
         ))}
@@ -203,7 +205,7 @@ function renderInline(text: string): ReactNode[] {
             href={link[2]}
             target="_blank"
             rel="noreferrer"
-            className="underline decoration-white/30 underline-offset-2 hover:decoration-white/70"
+            className="break-all underline decoration-white/30 underline-offset-2 hover:decoration-white/70"
           >
             {link[1]}
           </a>,

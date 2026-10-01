@@ -33,7 +33,7 @@ export function panelTabLabelClass(isActive: boolean, size: "sm" | "md" = "sm") 
 
 export function panelTabRowClass() {
   return [
-    "flex min-w-0 items-end overflow-x-auto overflow-y-hidden",
+    "flex min-w-0 max-w-full items-end overflow-x-hidden overflow-y-hidden",
     "[scrollbar-width:none]",
     "[-ms-overflow-style:none]",
     "[&::-webkit-scrollbar]:hidden",

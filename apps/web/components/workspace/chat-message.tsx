@@ -7,10 +7,9 @@ import { ChatMarkdown } from "./chat-markdown";
 type ChatMessageBubbleProps = {
   message: ChatMessage;
   agentLabel: string;
-  accentColor?: string | null;
 };
 
-export function ChatMessageBubble({ message, agentLabel, accentColor }: ChatMessageBubbleProps) {
+export function ChatMessageBubble({ message, agentLabel }: ChatMessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
@@ -18,24 +17,25 @@ export function ChatMessageBubble({ message, agentLabel, accentColor }: ChatMess
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex w-full max-w-full min-w-0 overflow-hidden ${isUser ? "justify-end" : "justify-start"}`}
     >
-      <div className={`flex min-w-0 max-w-[92%] flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+      <div
+        className={`flex min-w-0 max-w-[92%] flex-col gap-1 overflow-hidden ${
+          isUser ? "ml-auto w-fit items-end" : "w-full items-start"
+        }`}
+      >
         <span className="px-1 text-[11px] text-muted-foreground">{isUser ? "You" : agentLabel}</span>
         <div
-          className={`rounded-2xl px-3.5 py-2.5 ${
+          className={`max-w-full min-w-0 overflow-hidden break-words rounded-2xl px-3.5 py-2.5 ${
+            isUser ? "w-fit" : "w-full"
+          } ${
             isUser
               ? "rounded-br-md bg-[oklch(0.86_0.02_285)] text-[oklch(0.16_0.01_285)]"
               : "rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)]"
           }`}
-          style={
-            !isUser && accentColor
-              ? { boxShadow: `inset 3px 0 0 0 ${accentColor}` }
-              : undefined
-          }
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap text-[13px] leading-[1.6]">{message.content}</p>
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.6]">{message.content}</p>
           ) : (
             <ChatMarkdown content={message.content} />
           )}

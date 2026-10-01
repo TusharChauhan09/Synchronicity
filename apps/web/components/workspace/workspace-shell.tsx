@@ -7,6 +7,11 @@ import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
 import { SiteLoader } from "./site-loader";
 import { Button } from "@/components/ui/button";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { api, ApiError } from "@/lib/api";
 import { authClient } from "@repo/auth/client";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/lib/session-types";
@@ -207,7 +212,7 @@ export function WorkspaceShell() {
   async function handleCreateWorkspaceFromAgent(agentId: string) {
     setLinkError(null);
 
-    if (agentWorkspaceMap[agentId]) {
+    if (Object.values(workspaces).some((ws) => ws.sessionIds.includes(agentId))) {
       setLinkError(`${sessions[agentId]?.name ?? "Agent"} is already in a workspace.`);
       return;
     }
@@ -215,7 +220,7 @@ export function WorkspaceShell() {
     try {
       const created = await api<WorkspaceSnapshot>("/api/workspaces", {
         method: "POST",
-        body: JSON.stringify({ name: sessions[agentId]?.name ?? "workspace" }),
+        body: JSON.stringify({ name: "workspace" }),
       });
       const linked = await api<WorkspaceSnapshot>(`/api/workspaces/${created.id}/sessions`, {
         method: "POST",
@@ -265,34 +270,59 @@ export function WorkspaceShell() {
     }
   }
 
+  async function handleUnlinkAgent(agentId: string) {
+    const workspaceId = Object.values(workspaces).find((ws) => ws.sessionIds.includes(agentId))?.id;
+    if (!workspaceId) return;
+
+    setLinkError(null);
+    try {
+      await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}/sessions/${agentId}`, {
+        method: "DELETE",
+      });
+      await refreshAllWorkspaces();
+      if (viewMode === "workspace" && activeWorkspaceId === workspaceId) {
+        const remaining = workspaces[workspaceId]?.sessionIds.filter((id) => id !== agentId) ?? [];
+        if (remaining.length === 0) {
+          selectAgent(agentId);
+        }
+      }
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not remove agent from workspace";
+      setLinkError(message);
+    }
+  }
+
   async function handleDropAgentOnWorkspace(workspaceId: string, agentId: string) {
     const ws = workspaces[workspaceId];
     if (!ws) return;
 
     setLinkError(null);
-
-    const linkedWorkspaceId = agentWorkspaceMap[agentId];
-    if (linkedWorkspaceId && linkedWorkspaceId !== workspaceId) {
-      const other = workspaces[linkedWorkspaceId];
-      setLinkError(
-        `${sessions[agentId]?.name ?? "Agent"} is already in ${other?.name ?? "another workspace"}.`,
-      );
-      return;
-    }
+    const linkedWorkspaceId = Object.values(workspaces).find((w) =>
+      w.sessionIds.includes(agentId),
+    )?.id;
 
     try {
-      if (ws.sessionIds.includes(agentId)) {
-        await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}/sessions/${agentId}`, {
-          method: "DELETE",
-        });
-      } else {
-        await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}/sessions`, {
-          method: "POST",
-          body: JSON.stringify({ sessionId: agentId }),
-        });
-        selectWorkspace(workspaceId);
+      if (linkedWorkspaceId === workspaceId) {
+        await handleUnlinkAgent(agentId);
+        return;
       }
 
+      if (linkedWorkspaceId && linkedWorkspaceId !== workspaceId) {
+        await api<WorkspaceSnapshot>(`/api/workspaces/${linkedWorkspaceId}/sessions/${agentId}`, {
+          method: "DELETE",
+        });
+      }
+
+      await api<WorkspaceSnapshot>(`/api/workspaces/${workspaceId}/sessions`, {
+        method: "POST",
+        body: JSON.stringify({ sessionId: agentId }),
+      });
+      selectWorkspace(workspaceId);
       await refreshAllWorkspaces();
     } catch (err) {
       const message =
@@ -302,6 +332,59 @@ export function WorkspaceShell() {
             ? err.message
             : "Could not update workspace link";
       setLinkError(message);
+    }
+  }
+
+  async function handleDeleteWorkspace(id: string) {
+    const ws = workspaces[id];
+    if (!ws) return;
+
+    setLinkError(null);
+    const sessionIds = [...ws.sessionIds];
+
+    try {
+      await api(`/api/workspaces/${id}`, { method: "DELETE" });
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not remove workspace";
+      setLinkError(message);
+      return;
+    }
+
+    setWorkspaces((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    if (activeWorkspaceId === id) {
+      setActiveWorkspaceId(null);
+      setViewMode("agent");
+    }
+
+    for (const sessionId of sessionIds) {
+      await destroySession(sessionId);
+    }
+
+    const remainingOrder = sessionOrder.filter((sessionId) => !sessionIds.includes(sessionId));
+    setSessions((prev) => {
+      const next = { ...prev };
+      for (const sessionId of sessionIds) delete next[sessionId];
+      return next;
+    });
+    setSessionOrder(remainingOrder);
+
+    if (remainingOrder.length === 0) {
+      await handleAddAgent();
+      return;
+    }
+
+    if (!activeAgentId || sessionIds.includes(activeAgentId)) {
+      selectAgent(remainingOrder[0] ?? "");
     }
   }
 
@@ -499,56 +582,127 @@ export function WorkspaceShell() {
           <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 gap-3 px-4 pb-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.4fr)]">
-          <div className="min-h-0">
-            <BrowserPanel
-              session={browserSessionForPanel}
-              loading={loading}
-              controllable={controllable}
-              manualControl={manualControl}
-              tabs={browserTabs.length > 0 ? browserTabs : undefined}
-              activeTabId={activeAgentId ?? undefined}
-              onTabSelect={selectBrowserTab}
-              onToggleControl={() => setManualControl((value) => !value)}
-              onClose={(tabId) => void handleCloseAgent(tabId)}
-              onControl={handleControl}
-            />
+        <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
+          <div className="flex h-full min-h-0 flex-col gap-3 lg:hidden">
+            <div className="min-h-0 min-w-0 flex-1">
+              <BrowserPanel
+                session={browserSessionForPanel}
+                loading={loading}
+                controllable={controllable}
+                manualControl={manualControl}
+                tabs={browserTabs.length > 0 ? browserTabs : undefined}
+                activeTabId={activeAgentId ?? undefined}
+                onTabSelect={selectBrowserTab}
+                onToggleControl={() => setManualControl((value) => !value)}
+                onClose={(tabId) => void handleCloseAgent(tabId)}
+                onControl={handleControl}
+              />
+            </div>
+            <div className="min-h-0 min-w-0 flex-1">
+              <ChatPanel
+                session={viewMode === "agent" ? activeSession : null}
+                viewMode={viewMode}
+                agentTabs={chatAgentTabs}
+                activeAgentId={activeAgentId}
+                workspaceTabs={chatWorkspaceTabs}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelectAgent={selectAgent}
+                onAddAgent={() => void handleAddAgent()}
+                onSaveAgentName={handleSaveAgentName}
+                linkError={linkError}
+                chatReady={
+                  viewMode === "workspace" ? Boolean(activeWorkspace) : Boolean(activeSession)
+                }
+                onDropAgentOnWorkspace={(wsId, agentId) =>
+                  void handleDropAgentOnWorkspace(wsId, agentId)
+                }
+                onUnlinkAgent={(agentId) => void handleUnlinkAgent(agentId)}
+                onSelectWorkspace={selectWorkspace}
+                onSaveWorkspace={handleSaveWorkspace}
+                onCreateWorkspaceFromAgent={handleCreateWorkspaceFromAgent}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                title={activeSession?.name ?? "Agent"}
+                messages={
+                  viewMode === "workspace" && activeWorkspace ? activeWorkspace.messages : undefined
+                }
+                statusOverride={
+                  viewMode === "workspace" && activeWorkspace
+                    ? activeWorkspace.status === "running"
+                      ? "running"
+                      : "idle"
+                    : undefined
+                }
+                onSend={handleSend}
+                onResume={handleResume}
+                onFocusInput={() => setManualControl(false)}
+              />
+            </div>
           </div>
-          <div className="min-h-0">
-            <ChatPanel
-              session={viewMode === "agent" ? activeSession : null}
-              viewMode={viewMode}
-              agentTabs={chatAgentTabs}
-              activeAgentId={activeAgentId}
-              workspaceTabs={chatWorkspaceTabs}
-              activeWorkspaceId={activeWorkspaceId}
-              onSelectAgent={selectAgent}
-              onAddAgent={() => void handleAddAgent()}
-              onSaveAgentName={handleSaveAgentName}
-              linkError={linkError}
-              chatReady={
-                viewMode === "workspace" ? Boolean(activeWorkspace) : Boolean(activeSession)
-              }
-              onDropAgentOnWorkspace={(wsId, agentId) => void handleDropAgentOnWorkspace(wsId, agentId)}
-              onSelectWorkspace={selectWorkspace}
-              onSaveWorkspace={handleSaveWorkspace}
-              onCreateWorkspaceFromAgent={handleCreateWorkspaceFromAgent}
-              title={activeSession?.name ?? "Agent"}
-              messages={
-                viewMode === "workspace" && activeWorkspace ? activeWorkspace.messages : undefined
-              }
-              statusOverride={
-                viewMode === "workspace" && activeWorkspace
-                  ? activeWorkspace.status === "running"
-                    ? "running"
-                    : "idle"
-                  : undefined
-              }
-              onSend={handleSend}
-              onResume={handleResume}
-              onFocusInput={() => setManualControl(false)}
-            />
-          </div>
+
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="hidden h-full min-h-0 w-full overflow-hidden lg:flex"
+          >
+            <ResizablePanel defaultSize="65%" minSize="35%" className="min-h-0 min-w-0">
+              <BrowserPanel
+                session={browserSessionForPanel}
+                loading={loading}
+                controllable={controllable}
+                manualControl={manualControl}
+                tabs={browserTabs.length > 0 ? browserTabs : undefined}
+                activeTabId={activeAgentId ?? undefined}
+                onTabSelect={selectBrowserTab}
+                onToggleControl={() => setManualControl((value) => !value)}
+                onClose={(tabId) => void handleCloseAgent(tabId)}
+                onControl={handleControl}
+              />
+            </ResizablePanel>
+            <ResizableHandle withHandle className="mx-0.5 bg-border/80" />
+            <ResizablePanel
+              defaultSize="35%"
+              minSize={320}
+              maxSize="55%"
+              className="min-h-0 min-w-0 overflow-hidden"
+            >
+              <ChatPanel
+                session={viewMode === "agent" ? activeSession : null}
+                viewMode={viewMode}
+                agentTabs={chatAgentTabs}
+                activeAgentId={activeAgentId}
+                workspaceTabs={chatWorkspaceTabs}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelectAgent={selectAgent}
+                onAddAgent={() => void handleAddAgent()}
+                onSaveAgentName={handleSaveAgentName}
+                linkError={linkError}
+                chatReady={
+                  viewMode === "workspace" ? Boolean(activeWorkspace) : Boolean(activeSession)
+                }
+                onDropAgentOnWorkspace={(wsId, agentId) =>
+                  void handleDropAgentOnWorkspace(wsId, agentId)
+                }
+                onUnlinkAgent={(agentId) => void handleUnlinkAgent(agentId)}
+                onSelectWorkspace={selectWorkspace}
+                onSaveWorkspace={handleSaveWorkspace}
+                onCreateWorkspaceFromAgent={handleCreateWorkspaceFromAgent}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                title={activeSession?.name ?? "Agent"}
+                messages={
+                  viewMode === "workspace" && activeWorkspace ? activeWorkspace.messages : undefined
+                }
+                statusOverride={
+                  viewMode === "workspace" && activeWorkspace
+                    ? activeWorkspace.status === "running"
+                      ? "running"
+                      : "idle"
+                    : undefined
+                }
+                onSend={handleSend}
+                onResume={handleResume}
+                onFocusInput={() => setManualControl(false)}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
       )}
     </div>
