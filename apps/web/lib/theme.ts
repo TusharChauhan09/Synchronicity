@@ -12,9 +12,10 @@ export function readStoredTheme(): Theme {
 }
 
 export function applyThemeClass(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
-  document.documentElement.classList.toggle("light", theme === "light");
-  document.documentElement.style.colorScheme = theme;
+  const root = document.documentElement;
+  root.classList.remove("dark", "light");
+  root.classList.add(theme);
+  root.style.colorScheme = theme;
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch {

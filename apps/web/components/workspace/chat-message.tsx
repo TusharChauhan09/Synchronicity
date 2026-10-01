@@ -30,8 +30,8 @@ export function ChatMessageBubble({ message, agentLabel }: ChatMessageBubbleProp
             isUser ? "w-fit" : "w-full"
           } ${
             isUser
-              ? "rounded-br-md bg-[oklch(0.86_0.02_285)] text-[oklch(0.16_0.01_285)]"
-              : "rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)]"
+              ? "rounded-br-md bg-workspace-user-bubble text-workspace-user-bubble-fg"
+              : "rounded-bl-md border border-workspace-subtle-border bg-workspace-agent-bubble"
           }`}
         >
           {isUser ? (

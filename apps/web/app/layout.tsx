@@ -28,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <Script id="theme-init" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem("synchronicity-theme");var dark=t!=="light";document.documentElement.classList.toggle("dark",dark);document.documentElement.classList.toggle("light",!dark);document.documentElement.style.colorScheme=dark?"dark":"light";}catch(e){document.documentElement.classList.add("dark");}})();`}
+          {`(function(){try{var t=localStorage.getItem("synchronicity-theme");var theme=t==="light"?"light":"dark";var r=document.documentElement;r.classList.remove("dark","light");r.classList.add(theme);r.style.colorScheme=theme;}catch(e){document.documentElement.classList.add("dark");}})();`}
         </Script>
       </head>
       <body className="flex min-h-full flex-col">

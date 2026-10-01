@@ -28,7 +28,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 function renderBlock(block: Block): ReactNode {
   if (block.type === "code") {
     return (
-      <pre className="overflow-x-hidden whitespace-pre-wrap break-all rounded-lg border border-white/8 bg-[oklch(0.08_0.006_285)] px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground/85">
+      <pre className="overflow-x-hidden whitespace-pre-wrap break-all rounded-lg border border-workspace-subtle-border bg-workspace-browser px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground/85">
         <code>{block.code}</code>
       </pre>
     );
@@ -42,7 +42,7 @@ function renderBlock(block: Block): ReactNode {
 
   if (block.type === "quote") {
     return (
-      <blockquote className="border-l-2 border-white/20 pl-3 text-muted-foreground">
+      <blockquote className="border-l-2 border-workspace-subtle-border pl-3 text-muted-foreground">
         {renderInline(block.text)}
       </blockquote>
     );
@@ -65,7 +65,7 @@ function renderBlock(block: Block): ReactNode {
 
   if (block.type === "paragraph") {
     if (!block.text) {
-      return <div className="my-1 h-px bg-white/10" aria-hidden />;
+      return <div className="my-1 h-px bg-workspace-subtle-border" aria-hidden />;
     }
     return <p>{renderInline(block.text)}</p>;
   }
@@ -185,7 +185,7 @@ function renderInline(text: string): ReactNode[] {
       nodes.push(
         <code
           key={key++}
-          className="rounded-md bg-white/8 px-1 py-0.5 font-mono text-[12px] text-foreground"
+          className="rounded-md bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground"
         >
           {token.slice(1, -1)}
         </code>,
@@ -205,7 +205,7 @@ function renderInline(text: string): ReactNode[] {
             href={link[2]}
             target="_blank"
             rel="noreferrer"
-            className="break-all underline decoration-white/30 underline-offset-2 hover:decoration-white/70"
+            className="break-all underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground/60"
           >
             {link[1]}
           </a>,

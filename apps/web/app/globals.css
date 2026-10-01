@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark, .dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -39,6 +39,15 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-workspace-browser: var(--workspace-browser);
+  --color-workspace-chat: var(--workspace-chat);
+  --color-workspace-tab-inactive: var(--workspace-tab-inactive);
+  --color-workspace-elevated: var(--workspace-elevated);
+  --color-workspace-composer: var(--workspace-composer);
+  --color-workspace-agent-bubble: var(--workspace-agent-bubble);
+  --color-workspace-user-bubble: var(--workspace-user-bubble);
+  --color-workspace-user-bubble-fg: var(--workspace-user-bubble-fg);
+  --color-workspace-subtle-border: var(--workspace-subtle-border);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -81,6 +90,15 @@
   --sidebar-accent-foreground: oklch(0.16 0.01 285);
   --sidebar-border: oklch(0.16 0.01 285 / 10%);
   --sidebar-ring: oklch(0.55 0.02 285);
+  --workspace-browser: oklch(0.95 0.005 285);
+  --workspace-chat: oklch(0.98 0.003 285);
+  --workspace-tab-inactive: oklch(0.92 0.006 285);
+  --workspace-elevated: oklch(0.99 0.002 285);
+  --workspace-composer: oklch(0.96 0.005 285);
+  --workspace-agent-bubble: oklch(0.94 0.008 285);
+  --workspace-user-bubble: oklch(0.88 0.02 285);
+  --workspace-user-bubble-fg: oklch(0.16 0.01 285);
+  --workspace-subtle-border: oklch(0.16 0.01 285 / 12%);
 }
 
 .dark {
@@ -115,31 +133,41 @@
   --sidebar-accent-foreground: oklch(0.96 0.002 285);
   --sidebar-border: oklch(1 0 0 / 9%);
   --sidebar-ring: oklch(0.55 0.02 285);
+  --workspace-browser: oklch(0.09 0.006 285);
+  --workspace-chat: oklch(0.12 0.008 285);
+  --workspace-tab-inactive: oklch(0.07 0.005 285);
+  --workspace-elevated: oklch(0.16 0.01 285);
+  --workspace-composer: oklch(0.1 0.007 285);
+  --workspace-agent-bubble: oklch(0.16 0.01 285);
+  --workspace-user-bubble: oklch(0.86 0.02 285);
+  --workspace-user-bubble-fg: oklch(0.16 0.01 285);
+  --workspace-subtle-border: oklch(1 0 0 / 8%);
 }
 
-@supports (view-transition-name: root) {
-  html {
-    view-transition-name: root;
-  }
+html {
+  view-transition-name: root;
+}
 
-  @keyframes theme-reveal-down {
-    from {
-      clip-path: inset(0 0 100% 0);
-    }
-    to {
-      clip-path: inset(0 0 0 0);
-    }
-  }
+::view-transition-group(root) {
+  animation-duration: 0.6s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
 
-  ::view-transition-old(root) {
-    animation: none;
-    z-index: 0;
-  }
+::view-transition-image-pair(root) {
+  isolation: isolate;
+}
 
-  ::view-transition-new(root) {
-    animation: theme-reveal-down 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-    z-index: 1;
-  }
+::view-transition-old(root) {
+  animation: none !important;
+  mix-blend-mode: normal;
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  animation: none !important;
+  mix-blend-mode: normal;
+  z-index: 2;
 }
 
 @layer base {

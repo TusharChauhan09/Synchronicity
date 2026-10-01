@@ -6,99 +6,56 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import { applyThemeClass, readStoredTheme, type Theme } from "@/lib/theme";
+import { runThemeTransition, type ThemeTransitionOrigin } from "@/lib/theme-transition";
 
 type ThemeContextValue = {
   theme: Theme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
-  isTransitioning: boolean;
+  toggleTheme: (origin?: ThemeTransitionOrigin) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function runViewTransition(update: () => void) {
-  const doc = document as Document & {
-    startViewTransition?: (callback: () => void) => void;
-  };
-  if (typeof doc.startViewTransition === "function") {
-    doc.startViewTransition(update);
-    return true;
-  }
-  return false;
+function currentThemeFromDom(): Theme {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
-  const [pendingTheme, setPendingTheme] = useState<Theme | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const lockRef = useRef(false);
 
   useEffect(() => {
-    setThemeState(readStoredTheme());
+    const stored = readStoredTheme();
+    applyThemeClass(stored);
+    setThemeState(stored);
   }, []);
 
-  const commitTheme = useCallback((next: Theme) => {
-    applyThemeClass(next);
-    setThemeState(next);
+  const toggleTheme = useCallback((origin?: ThemeTransitionOrigin) => {
+    if (lockRef.current) return;
+    lockRef.current = true;
+
+    const next: Theme = currentThemeFromDom() === "dark" ? "light" : "dark";
+
+    const release = () => {
+      lockRef.current = false;
+    };
+
+    try {
+      runThemeTransition(next, setThemeState, release, origin);
+    } catch {
+      applyThemeClass(next);
+      setThemeState(next);
+      release();
+    }
   }, []);
 
-  const setTheme = useCallback(
-    (next: Theme) => {
-      if (next === theme && !isTransitioning) return;
-      if (isTransitioning) return;
+  const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
-      setIsTransitioning(true);
-
-      const apply = () => commitTheme(next);
-
-      if (runViewTransition(apply)) {
-        window.setTimeout(() => setIsTransitioning(false), 560);
-        return;
-      }
-
-      setPendingTheme(next);
-    },
-    [commitTheme, isTransitioning, theme],
-  );
-
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }, [setTheme, theme]);
-
-  const value = useMemo(
-    () => ({ theme, setTheme, toggleTheme, isTransitioning }),
-    [isTransitioning, setTheme, theme, toggleTheme],
-  );
-
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-      <AnimatePresence>
-        {pendingTheme ? (
-          <motion.div
-            key={pendingTheme}
-            className="pointer-events-none fixed inset-0 z-[10000] bg-background"
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            style={{ transformOrigin: "top" }}
-            onAnimationStart={() => {
-              commitTheme(pendingTheme);
-            }}
-            onAnimationComplete={() => {
-              setPendingTheme(null);
-              setIsTransitioning(false);
-            }}
-          />
-        ) : null}
-      </AnimatePresence>
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

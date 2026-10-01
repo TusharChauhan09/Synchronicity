@@ -186,7 +186,7 @@ export function BrowserPanel({
       </div>
 
       {/* Outer browser box — flush below tabs, no inner padding */}
-      <div className="relative mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-border bg-[oklch(0.09_0.006_285)]">
+      <div className="relative mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-border bg-workspace-browser">
         {screenshot ? (
           <div
             ref={surfaceRef}
@@ -215,7 +215,7 @@ export function BrowserPanel({
         )}
 
         {waiting && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-950 dark:text-amber-100">
             Click to focus, type on the page, then press Resume in chat.
           </div>
         )}

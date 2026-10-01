@@ -366,8 +366,8 @@ export function ChatPanel({
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-x-clip overflow-y-hidden rounded-b-xl border border-border bg-[oklch(0.12_0.008_285)]">
-        <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-2.5">
+      <div className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-x-clip overflow-y-hidden rounded-b-xl border border-border bg-workspace-chat">
+        <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-workspace-subtle-border px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <span className={`size-1.5 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
             <span className="truncate text-sm font-medium tracking-tight">{headerTitle}</span>
@@ -393,7 +393,7 @@ export function ChatPanel({
           <div className="box-border min-w-0 w-full max-w-full px-4 py-4">
             {!hasMessages && !thinking && (
               <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
-                <div className="flex size-10 items-center justify-center rounded-2xl border border-white/8 bg-card">
+                <div className="flex size-10 items-center justify-center rounded-2xl border border-workspace-subtle-border bg-card">
                   <Sparkles className="size-4 text-muted-foreground" strokeWidth={1.5} />
                 </div>
                 <div className="space-y-1">
@@ -420,7 +420,7 @@ export function ChatPanel({
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="flex max-w-full min-w-0 items-center gap-2.5 rounded-2xl rounded-bl-md border border-white/8 bg-[oklch(0.16_0.01_285)] px-3.5 py-2.5"
+                    className="flex max-w-full min-w-0 items-center gap-2.5 rounded-2xl rounded-bl-md border border-workspace-subtle-border bg-workspace-agent-bubble px-3.5 py-2.5"
                   >
                     <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label={statusLabel} />
                     <motion.span
@@ -458,12 +458,12 @@ export function ChatPanel({
 
         <form
           onSubmit={(event) => void handleSubmit(event)}
-          className="min-w-0 shrink-0 border-t border-white/6 p-3"
+          className="min-w-0 shrink-0 border-t border-workspace-subtle-border p-3"
         >
           {sendError && <p className="mb-2 px-1 text-xs text-destructive">{sendError}</p>}
           <div
-            className={`flex min-w-0 items-end gap-2 rounded-xl border border-white/8 bg-[oklch(0.1_0.007_285)] p-2 ${
-              disabled ? "opacity-60" : "focus-within:border-white/18"
+            className={`flex min-w-0 items-end gap-2 rounded-xl border border-workspace-subtle-border bg-workspace-composer p-2 ${
+              disabled ? "opacity-60" : "focus-within:border-foreground/20"
             }`}
           >
             <textarea
