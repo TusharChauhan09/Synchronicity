@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { CustomerPortal, checkoutHandler } from '@dodopayments/express';
-import { defaultCheckout } from '../controllers/payments.controller.js';
+import { defaultCheckout, planCheckout } from '../controllers/payments.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { getDodoConfig } from '../lib/dodo.js';
 
@@ -15,6 +15,7 @@ const checkoutBase = {
 export const paymentRoutes = Router();
 
 paymentRoutes.post('/api/checkout/default', requireAuth, defaultCheckout);
+paymentRoutes.post('/api/checkout/:plan', requireAuth, planCheckout);
 
 paymentRoutes.get(
   '/api/checkout',

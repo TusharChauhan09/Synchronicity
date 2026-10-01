@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import { toNodeHandler, auth } from '@repo/auth';
+import { billingRoutes } from './routes/billing.js';
 import { paymentRoutes } from './routes/payments.js';
 import { sessionRoutes } from './routes/session.js';
 import { workspaceRoutes } from './routes/workspace.js';
@@ -24,6 +25,7 @@ app.use(webhookRoutes);
 app.use(express.json());
 
 app.use(paymentRoutes);
+app.use(billingRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });

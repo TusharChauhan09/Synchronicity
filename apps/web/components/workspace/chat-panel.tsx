@@ -55,6 +55,7 @@ type ChatPanelProps = {
   onSend: (message: string) => Promise<void>;
   onResume: () => Promise<void>;
   onFocusInput?: () => void;
+  creditsRemaining?: number;
 };
 
 function statusDot(status: SessionSnapshot["status"] | undefined) {
@@ -87,6 +88,7 @@ export function ChatPanel({
   onSend,
   onResume,
   onFocusInput,
+  creditsRemaining,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -370,8 +372,14 @@ export function ChatPanel({
             <span className={`size-1.5 shrink-0 rounded-full ${statusDot(status)}`} aria-hidden />
             <span className="truncate text-sm font-medium tracking-tight">{headerTitle}</span>
           </div>
-          <span className="text-[11px] text-muted-foreground">
-            {waiting ? "Paused" : isRunning ? "Working" : "Ready"}
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {waiting
+              ? "Paused"
+              : isRunning
+                ? "Working"
+                : creditsRemaining !== undefined
+                  ? `${creditsRemaining} credits`
+                  : "Ready"}
           </span>
         </div>
 

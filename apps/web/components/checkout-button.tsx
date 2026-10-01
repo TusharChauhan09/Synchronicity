@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
+import type { PlanId } from "@/lib/billing-types";
 import { authClient } from "@repo/auth/client";
 
 type CheckoutButtonProps = {
   label?: string;
   className?: string;
+  plan?: PlanId;
 };
 
-export function CheckoutButton({ label = "Subscribe", className }: CheckoutButtonProps) {
+export function CheckoutButton({ label = "Subscribe", className, plan = "plus" }: CheckoutButtonProps) {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,9 @@ export function CheckoutButton({ label = "Subscribe", className }: CheckoutButto
     setError(null);
 
     try {
-      const body = await api<{ checkout_url?: string }>("/api/checkout/default", {
+      const endpoint =
+        plan === "plus" || plan === "pro" ? `/api/checkout/${plan}` : "/api/checkout/default";
+      const body = await api<{ checkout_url?: string }>(endpoint, {
         method: "POST",
       });
 
@@ -49,7 +53,12 @@ export function CheckoutButton({ label = "Subscribe", className }: CheckoutButto
 
   return (
     <div className={className}>
-      <Button size="lg" onClick={() => void handleCheckout()} disabled={loading || isPending}>
+      <Button
+        size="lg"
+        className="w-full"
+        onClick={() => void handleCheckout()}
+        disabled={loading || isPending}
+      >
         {loading ? (
           <>
             <Loader2 className="animate-spin" />

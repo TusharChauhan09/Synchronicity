@@ -18,7 +18,17 @@ export function getDodoConfig() {
       process.env.DODO_PAYMENTS_RETURN_URL ?? 'http://localhost:3000/checkout/success',
     webhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY ?? '',
     productId: process.env.DODO_PAYMENTS_PRODUCT_ID?.trim() ?? '',
+    productIdPlus: process.env.DODO_PAYMENTS_PRODUCT_ID_PLUS?.trim() ?? '',
+    productIdPro: process.env.DODO_PAYMENTS_PRODUCT_ID_PRO?.trim() ?? '',
   };
+}
+
+export function resolveProductIdForPlan(plan: 'plus' | 'pro'): string {
+  const dodo = getDodoConfig();
+  if (plan === 'plus' && dodo.productIdPlus) return dodo.productIdPlus;
+  if (plan === 'pro' && dodo.productIdPro) return dodo.productIdPro;
+  if (dodo.productId) return dodo.productId;
+  throw new Error(`Dodo product id for ${plan} is not configured`);
 }
 
 export function createDodoClient() {

@@ -1,18 +1,7 @@
 import { CheckoutButton } from "@/components/checkout-button";
 import { SiteHeader } from "@/components/site-header";
-
-const plan = {
-  name: "Pro",
-  price: "$20",
-  period: "/ month",
-  description: "Full browser agent workspace with human-in-the-loop control.",
-  features: [
-    "Unlimited agent sessions",
-    "Human takeover for CAPTCHAs & logins",
-    "Persistent browser profiles",
-    "Priority support",
-  ],
-};
+import { PUBLIC_PLANS } from "@/lib/plans";
+import { cn } from "cn";
 
 export default function PricingPage() {
   return (
@@ -25,31 +14,52 @@ export default function PricingPage() {
             Pricing
           </p>
           <h1 className="text-3xl font-medium tracking-tight sm:text-4xl">
-            Simple plans for browser automation
+            Credits for every chat
           </h1>
           <p className="mt-4 text-muted-foreground">
-            Subscribe to unlock the full workspace. Payments are handled securely by Dodo
-            Payments.
+            Each agent or workspace message uses one credit. Free includes 5 chats on a single
+            window; paid plans add more credits and concurrent browsers.
           </p>
         </div>
 
-        <article className="mt-12 max-w-md rounded-xl border border-border bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium">{plan.name}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{plan.description}</p>
-          <p className="mt-6 flex items-baseline gap-1">
-            <span className="text-4xl font-medium tracking-tight">{plan.price}</span>
-            <span className="text-sm text-muted-foreground">{plan.period}</span>
-          </p>
-          <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
-            {plan.features.map((feature) => (
-              <li key={feature} className="flex gap-2">
-                <span className="text-foreground">·</span>
-                {feature}
-              </li>
-            ))}
-          </ul>
-          <CheckoutButton className="mt-8" label="Subscribe with Dodo" />
-        </article>
+        <div className="mt-12 grid gap-4 lg:grid-cols-3">
+          {PUBLIC_PLANS.map((plan) => (
+            <article
+              key={plan.id}
+              className={cn(
+                "flex flex-col rounded-xl border border-border bg-card/60 p-6 backdrop-blur-sm",
+                plan.id === "plus" && "ring-1 ring-foreground/15",
+              )}
+            >
+              <h2 className="text-lg font-medium">{plan.name}</h2>
+              <p className="mt-4 flex items-baseline gap-1">
+                <span className="text-4xl font-medium tracking-tight">{plan.priceLabel}</span>
+                {plan.id !== "free" && (
+                  <span className="text-sm text-muted-foreground">/ month</span>
+                )}
+              </p>
+              <ul className="mt-6 flex-1 space-y-2 text-sm text-muted-foreground">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex gap-2">
+                    <span className="text-foreground">·</span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8">
+                {plan.id === "free" ? (
+                  <p className="text-center text-sm text-muted-foreground">Included when you sign in</p>
+                ) : (
+                  <CheckoutButton
+                    plan={plan.id}
+                    label={`Get ${plan.name}`}
+                    className="w-full"
+                  />
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
       </main>
     </div>
   );

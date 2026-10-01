@@ -12,6 +12,7 @@ import {
   startWorkspaceChat,
   workspaceBelongsToUser,
 } from '@repo/agent';
+import { consumeChatCredit } from '@repo/db/billing';
 
 function getUserId(req: Request, res: Response): string | null {
   if (!req.userId) {
@@ -164,6 +165,15 @@ export async function chatWorkspace(req: Request, res: Response) {
     const existing = getWorkspaceSnapshot(owned.id);
     if (!existing) {
       res.status(404).json({ error: 'Workspace not found' });
+      return;
+    }
+
+    try {
+      await consumeChatCredit(owned.userId);
+    } catch (creditError) {
+      const creditMessage =
+        creditError instanceof Error ? creditError.message : 'No credits remaining';
+      res.status(402).json({ error: creditMessage });
       return;
     }
 

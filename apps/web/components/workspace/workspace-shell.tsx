@@ -6,14 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserPanel } from "./browser-panel";
 import { ChatPanel } from "./chat-panel";
 import { SiteLoader } from "./site-loader";
-import { Button } from "@/components/ui/button";
+import { UserMenu } from "@/components/user-menu";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useBilling } from "@/hooks/use-billing";
 import { api, ApiError } from "@/lib/api";
-import { authClient } from "@repo/auth/client";
 import type { SessionSnapshot, WorkspaceSnapshot } from "@/lib/session-types";
 
 type ViewMode = "agent" | "workspace";
@@ -43,6 +43,7 @@ function workspaceColorForAgent(
 
 export function WorkspaceShell() {
   const router = useRouter();
+  const { billing, refresh: refreshBilling } = useBilling(8_000);
   const [sessions, setSessions] = useState<Record<string, SessionSnapshot>>({});
   const [sessionOrder, setSessionOrder] = useState<string[]>([]);
   const [workspaces, setWorkspaces] = useState<Record<string, WorkspaceSnapshot>>({});
@@ -69,6 +70,9 @@ export function WorkspaceShell() {
   );
 
   const waiting = activeSession?.status === "waiting_for_user";
+  const workspaceRunning =
+    viewMode === "workspace" && activeWorkspace?.status === "running";
+  const agentRunning = activeSession?.status === "running";
 
   const controllable = Boolean(
     activeSession &&
@@ -473,6 +477,7 @@ export function WorkspaceShell() {
       });
       setWorkspaces((prev) => ({ ...prev, [body.id]: normalizeWorkspace(body) }));
       pollWorkspaceUntilIdle(activeWorkspaceId);
+      void refreshBilling();
       return;
     }
 
@@ -483,6 +488,7 @@ export function WorkspaceShell() {
       body: JSON.stringify({ message }),
     });
     setSessions((prev) => ({ ...prev, [activeAgentId]: body }));
+    void refreshBilling();
   }
 
   async function handleResume() {
@@ -543,6 +549,14 @@ export function WorkspaceShell() {
     workspaceColor: workspaceColorForAgent(agent.id, agentWorkspaceMap, workspaces) ?? null,
   }));
 
+  const headerStatusLabel = controllable
+    ? "You control"
+    : agentRunning || workspaceRunning
+      ? "Working"
+      : billing
+        ? `${billing.creditsRemaining} credits`
+        : activeSession?.status ?? "booting";
+
   const chatWorkspaceTabs = workspaceList.map((ws) => ({
     id: ws.id,
     name: ws.name,
@@ -558,18 +572,8 @@ export function WorkspaceShell() {
           <span className="text-sm font-medium tracking-tight">Synchronicity</span>
         </Link>
         <div className="flex items-center gap-3">
-          <p className="text-xs text-muted-foreground">
-            {controllable ? "You control" : activeSession?.status ?? "booting"}
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void authClient.signOut().then(() => router.push("/"));
-            }}
-          >
-            Sign out
-          </Button>
+          <p className="text-xs tabular-nums text-muted-foreground">{headerStatusLabel}</p>
+          <UserMenu />
         </div>
       </header>
 
@@ -635,6 +639,7 @@ export function WorkspaceShell() {
                 onSend={handleSend}
                 onResume={handleResume}
                 onFocusInput={() => setManualControl(false)}
+                creditsRemaining={billing?.creditsRemaining}
               />
             </div>
           </div>
@@ -700,6 +705,7 @@ export function WorkspaceShell() {
                 onSend={handleSend}
                 onResume={handleResume}
                 onFocusInput={() => setManualControl(false)}
+                creditsRemaining={billing?.creditsRemaining}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

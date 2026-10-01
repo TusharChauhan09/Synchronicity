@@ -14,6 +14,7 @@ import {
   sessionBelongsToUser,
   startSessionTask,
 } from '@repo/agent';
+import { assertCanOpenWindow, consumeChatCredit } from '@repo/db/billing';
 
 function getUserId(req: Request, res: Response): string | null {
   if (!req.userId) {
@@ -62,6 +63,11 @@ export async function createSession(req: Request, res: Response) {
     const startUrl = typeof req.body?.startUrl === 'string' ? req.body.startUrl : undefined;
     const forceNew = req.body?.forceNew === true;
     const name = typeof req.body?.name === 'string' ? req.body.name : undefined;
+
+    const openSessions = listSessionsForUser(userId);
+    if (forceNew) {
+      await assertCanOpenWindow(userId, openSessions.length);
+    }
 
     const session = forceNew
       ? await createUserSession(userId, startUrl, name)
@@ -139,6 +145,15 @@ export async function chatSession(req: Request, res: Response) {
 
     if (existing.status === 'running') {
       res.status(409).json({ error: 'Agent is already running' });
+      return;
+    }
+
+    try {
+      await consumeChatCredit(owned.userId);
+    } catch (creditError) {
+      const creditMessage =
+        creditError instanceof Error ? creditError.message : 'No credits remaining';
+      res.status(402).json({ error: creditMessage });
       return;
     }
 
